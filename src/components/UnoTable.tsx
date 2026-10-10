@@ -159,7 +159,6 @@ export type UnoTableProps = {
 export function UnoTable({ state, busy, error, onAction, onLeave, onClose }: UnoTableProps) {
   const [pendingWild, setPendingWild] = useState<string | null>(null);
   const [rulesOpen, setRulesOpen] = useState(false);
-  const [confirmLeave, setConfirmLeave] = useState(false);
   const yourTurn = state.turn === 'you' && state.status === 'playing';
   const gameOver = state.status === 'over';
   const opponentCountdown = Math.max(0, Math.ceil((state.opponentCountdownMs ?? 0) / 1000));
@@ -277,9 +276,9 @@ export function UnoTable({ state, busy, error, onAction, onLeave, onClose }: Uno
           )}
           <button
             type="button"
-            onClick={() => setConfirmLeave(true)}
+            onClick={() => onLeave()}
             aria-label="Quit the UNO game"
-            title="Quit the UNO game"
+            title="Quit the UNO game and go back to chat"
             className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-800 text-slate-300 transition hover:bg-red-900/70 hover:text-red-200 md:h-8 md:w-8"
           >
             <LogOut className="h-4 w-4" />
@@ -566,42 +565,6 @@ export function UnoTable({ state, busy, error, onAction, onLeave, onClose }: Uno
         </div>
       )}
 
-      {/* Leaving mid-game (arena) */}
-      {confirmLeave && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Leave the game?"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-        >
-          <div className="w-full max-w-xs rounded-2xl border border-slate-700 bg-slate-900 p-6 text-center shadow-2xl">
-            <h3 className="mb-2 text-lg font-black uppercase tracking-wider text-white">
-              Leave the game?
-            </h3>
-            <p className="mb-5 text-xs leading-relaxed text-slate-400">
-              Leaving cancels this table. Minimize instead to keep playing while you chat.
-            </p>
-            <div className="space-y-2">
-              <button
-                type="button"
-                autoFocus
-                onClick={() => setConfirmLeave(false)}
-                className="w-full rounded-xl bg-slate-800 py-2.5 text-sm font-bold text-slate-200 transition hover:bg-slate-700"
-              >
-                Stay at the table
-              </button>
-              <button
-                type="button"
-                onClick={() => onLeave()}
-                className="w-full rounded-xl border border-red-500/40 bg-red-950/60 py-2.5 text-sm font-bold text-red-300 transition hover:bg-red-900/60"
-              >
-                Leave table
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Game over */}
       {gameOver && (
         <div
@@ -659,21 +622,12 @@ export function UnoTable({ state, busy, error, onAction, onLeave, onClose }: Uno
               )}
               <button
                 type="button"
-                onClick={onLeave}
+                onClick={() => onLeave()}
                 autoFocus
                 className="w-full rounded-xl bg-emerald-600 py-3 font-bold text-white shadow-sm transition hover:bg-emerald-500"
               >
-                Leave table
+                Back to chat
               </button>
-              {onClose && (
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="w-full rounded-xl border border-white/10 bg-slate-800 py-2.5 text-sm font-bold text-slate-300 transition hover:bg-slate-700"
-                >
-                  Back to chat
-                </button>
-              )}
             </div>
           </div>
         </div>

@@ -41,6 +41,7 @@ import { ChatAttachments } from './ChatAttachments';
 import { PhotoDialog, ZoomablePhoto } from './PhotoDialog';
 import { VoiceRecorder } from './VoiceRecorder';
 import { SafetyDialog } from './SafetyDialog';
+import { BOT_AVATAR, PixelAvatar, avatarConfigForHandle } from './PixelAvatar';
 import { collectPeerImageHashes } from '../utils/imageReportHashes';
 import { VoiceMessagePlayer } from './VoiceMessagePlayer';
 import { MusicSnippetPicker } from './MusicSnippetPicker';
@@ -70,6 +71,11 @@ import '../matching-chat.css';
 
 const STUDENT_CHATBOT_NAME = 'Student Chatbot Assistant';
 const CONVERSATION_STARTER_LIMIT = 3;
+// Slash commands only run in the chatbot chat. Shown as predictions while
+// typing so users discover what they can type.
+const CHATBOT_COMMANDS = [
+  { command: '/model', description: 'See and switch answer bots' },
+] as const;
 const PRESENCE_LABELS: Record<PeerPresence, string> = {
   active: 'Active',
   inactive: 'Inactive',
@@ -133,6 +139,10 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   const [roomMusic, setRoomMusic] = useState<RoomMusicState>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hasInputText, setHasInputText] = useState(false);
+  // First whitespace-delimited token of the composer text, when it starts
+  // with '/'. Drives the chatbot command predictions.
+  const [slashHead, setSlashHead] = useState<string | null>(null);
+  const [dismissedHead, setDismissedHead] = useState<string | null>(null);
   const [pendingImages, setPendingImages] = useState<ImageUpload[]>([]);
   const [pendingVoice, setPendingVoice] = useState<VoiceUpload | null>(null);
   const [preparingImages, setPreparingImages] = useState(false);
@@ -150,6 +160,8 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   const [musicPickerOpen, setMusicPickerOpen] = useState(false);
   const [safetyOpen, setSafetyOpen] = useState(false);
   const [safetyMessageId, setSafetyMessageId] = useState<string | null>(null);
+  // One report per message: once reported, the report affordances retire.
+  const [reportedMessageIds, setReportedMessageIds] = useState<string[]>([]);
   const [safetyImageHashes, setSafetyImageHashes] = useState<string[]>([]);
   const openSafetyDialog = useCallback(
     (messageId: string | null) => {
@@ -835,9 +847,18 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     }
   };
   const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const hasText = Boolean(event.target.value.trim());
+    const rawValue = event.target.value;
+    const hasText = Boolean(rawValue.trim());
     setHasInputText((current) => (current === hasText ? current : hasText));
-    if (!event.target.value.trim()) setSelectedStarter(null);
+    if (!rawValue.trim()) setSelectedStarter(null);
+    const spaceIndex = rawValue.indexOf(' ');
+    const head =
+      rawValue.startsWith('/') && rawValue.length > 1
+        ? spaceIndex === -1
+          ? rawValue
+          : rawValue.slice(0, spaceIndex)
+        : null;
+    setSlashHead((current) => (current === head ? current : head));
     if (Date.now() - lastTypingAt.current > 1000) {
       sendTyping(true);
       lastTypingAt.current = Date.now();
@@ -1228,8 +1249,33 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     if (inputRef.current) inputRef.current.value = text;
     setHasInputText(true);
     setSelectedStarter(text);
+    setSlashHead(null);
+    setDismissedHead(null);
     inputRef.current?.focus();
   };
+  // Accepting a prediction replaces only the command head, keeping any
+  // arguments already typed after the space.
+  const applyCommandPrediction = (command: string) => {
+    const el = inputRef.current;
+    if (!el || sendingRef.current || peerDisconnected || editingMessageId) return;
+    const spaceIndex = el.value.indexOf(' ');
+    el.value = spaceIndex === -1 ? `${command} ` : command + el.value.slice(spaceIndex);
+    setHasInputText(true);
+    setSelectedStarter(null);
+    setSlashHead(command);
+    setDismissedHead(command);
+    el.focus();
+  };
+  const slashMatches = CHATBOT_COMMANDS.filter(
+    (item) =>
+      peer.isSimulated &&
+      !peerDisconnected &&
+      !editingMessageId &&
+      hasInputText &&
+      slashHead !== null &&
+      slashHead !== dismissedHead &&
+      item.command.toLowerCase().startsWith(slashHead.toLowerCase()),
+  );
   const leave = async (next: boolean) => {
     if (roomId && !peer.isSimulated) {
       try {
@@ -1330,21 +1376,38 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             showReroll={false}
             conversation={
               <div className="chat-header-conversation flex min-w-0 flex-1 items-center justify-center">
-                <div className="chat-header-peer flex min-w-0 w-full flex-col items-center justify-center gap-0.5 text-center">
+                <a
+                  href="#chat-messages-container"
+                  className="chat-skip-link sr-only focus:not-sr-only focus:absolute focus:left-3 focus:top-2 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2 focus:text-xs focus:font-bold focus:text-stone-900 focus:shadow-lg dark:focus:bg-stone-900 dark:focus:text-white"
+                >
+                  Skip to messages
+                </a>
+                <div className="chat-header-peer flex min-w-0 w-full items-center justify-start gap-2">
                   <span
-                    title={peer.isSimulated ? STUDENT_CHATBOT_NAME : peer.handle}
-                    className="chat-header-peer-name min-w-0 max-w-full line-clamp-2 break-words text-center text-[13px] font-bold leading-4 text-stone-900 dark:text-white sm:text-sm"
+                    aria-hidden="true"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center self-center overflow-hidden rounded-full border border-stone-200 dark:border-stone-700"
                   >
-                    {peer.isSimulated ? STUDENT_CHATBOT_NAME : peer.handle}
-                  </span>
-                  <span className="chat-header-status flex shrink-0 items-center justify-center gap-1 text-[10px] font-medium leading-3">
-                    <span
-                      className="chat-presence-dot"
-                      data-status={peerPresence}
-                      aria-hidden="true"
+                    <PixelAvatar
+                      config={peer.isSimulated ? BOT_AVATAR : avatarConfigForHandle(peer.handle)}
+                      size={28}
                     />
-                    <span className="chat-presence-label shrink-0" data-status={peerPresence}>
-                      {PRESENCE_LABELS[peerPresence]}
+                  </span>
+                  <span className="flex min-w-0 flex-col items-start justify-center gap-0.5 py-px text-left">
+                    <span
+                      title={peer.isSimulated ? STUDENT_CHATBOT_NAME : peer.handle}
+                      className="chat-header-peer-name min-w-0 max-w-full truncate text-left text-[13px] font-bold leading-4 tracking-tight text-stone-900 dark:text-white sm:text-sm"
+                    >
+                      {peer.isSimulated ? STUDENT_CHATBOT_NAME : peer.handle}
+                    </span>
+                    <span className="chat-header-status flex shrink-0 items-center justify-start gap-1 text-[10px] font-medium leading-3">
+                      <span
+                        className="chat-presence-dot"
+                        data-status={peerPresence}
+                        aria-hidden="true"
+                      />
+                      <span className="chat-presence-label shrink-0" data-status={peerPresence}>
+                        {peerDisconnected ? 'Ended' : PRESENCE_LABELS[peerPresence]}
+                      </span>
                     </span>
                   </span>
                 </div>
@@ -1436,12 +1499,20 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           />
         </div>
         {connectionLost && !peerDisconnected && (
-          <p
-            role="status"
-            className="w-full shrink-0 px-3 py-1.5 text-center text-xs font-semibold text-stone-500 dark:text-stone-400 sm:px-6"
-          >
-            Reconnecting… Your messages will sync when you&apos;re back online.
-          </p>
+          <div className="w-full shrink-0 px-3 pt-2 sm:px-6">
+            <p
+              role="status"
+              aria-live="polite"
+              className="mx-auto flex w-full max-w-3xl items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-center text-xs font-semibold text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+            >
+              <RefreshCw
+                className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+              Reconnecting… you&apos;re still in the room. Messages will sync when you&apos;re back
+              online.
+            </p>
+          </div>
         )}
         {/* Scrollable Messages Area */}
         <div
@@ -1451,6 +1522,13 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           className="flex-1 min-h-0 w-full px-3 py-3.5 sm:px-6 sm:py-7 overflow-y-auto overscroll-contain space-y-1 select-text"
         >
           <div className="max-w-3xl mx-auto w-full space-y-0.5">
+            <div className="flex items-center gap-3 py-2" aria-hidden="true">
+              <span className="h-px flex-1 bg-stone-200 dark:bg-stone-800" />
+              <span className="rounded-full border border-stone-200 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-500 dark:border-stone-700 dark:bg-stone-900/80 dark:text-stone-400">
+                Today
+              </span>
+              <span className="h-px flex-1 bg-stone-200 dark:bg-stone-800" />
+            </div>
             {messages.map((msg, index) => {
               if (msg.type === 'system') {
                 const isUnsentMessage = msg.text === 'Message unsent.';
@@ -1586,6 +1664,17 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                           >
                             <Reply className="chat-theme-accent-text h-4 w-4" />
                           </button>
+                          {!msg.isMe && !reportedMessageIds.includes(msg.id) && (
+                            <button
+                              type="button"
+                              aria-label="Report this message"
+                              title="Report this message"
+                              onClick={() => openSafetyDialog(msg.id)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+                            >
+                              <Flag className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+                            </button>
+                          )}
                           {(msg.isMe || !!msg.musicSnippet) && (
                             <button
                               type="button"
@@ -1790,34 +1879,38 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
 
             {/* Peer Typing Indicator */}
             {isPeerTyping && (
-              <div className="flex items-center space-x-2 text-xs font-mono text-stone-500 dark:text-stone-400 py-1">
-                <div className="flex space-x-1">
-                  <div
-                    className="w-1.5 h-1.5 animate-pulse"
-                    style={{ backgroundColor: chatTheme.accent }}
-                  />
-                  <div
-                    className="w-1.5 h-1.5 animate-pulse [animation-delay:0.2s]"
-                    style={{ backgroundColor: chatTheme.accent }}
-                  />
-                  <div
-                    className="w-1.5 h-1.5 animate-pulse [animation-delay:0.4s]"
-                    style={{ backgroundColor: chatTheme.accent }}
-                  />
-                </div>
-                <span>{peer.isSimulated ? STUDENT_CHATBOT_NAME : peer.handle} is typing…</span>
+              <div
+                role="status"
+                aria-live="polite"
+                className="flex w-fit max-w-[92%] items-center gap-2 rounded-2xl rounded-bl-md border border-stone-200 bg-white/95 px-3.5 py-2.5 text-xs text-stone-500 shadow-[0_1px_2px_rgba(41,37,36,0.06)] dark:border-stone-700/80 dark:bg-stone-900/95 dark:text-stone-400"
+              >
+                <span aria-hidden="true" className="chat-typing-dots flex space-x-1">
+                  <span style={{ backgroundColor: chatTheme.accent }} />
+                  <span style={{ backgroundColor: chatTheme.accent }} />
+                  <span style={{ backgroundColor: chatTheme.accent }} />
+                </span>
+                <span className="truncate">
+                  {peer.isSimulated ? STUDENT_CHATBOT_NAME : peer.handle} is typing…
+                </span>
               </div>
             )}
 
             {/* Disconnection Banner */}
             {peerDisconnected && (
-              <div className="p-4 border border-red-300 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300 text-xs max-w-md mx-auto my-4 text-center space-y-2">
-                <div className="flex items-center justify-center space-x-2 font-bold">
-                  <AlertTriangle className="w-4 h-4" />
+              <div
+                role="status"
+                className="p-5 border rounded-2xl border-stone-200 dark:border-stone-700 bg-white/95 dark:bg-stone-900/95 text-stone-800 dark:text-stone-200 text-xs max-w-md mx-auto my-4 text-center space-y-2 shadow-[0_10px_28px_rgba(41,37,36,0.08)]"
+              >
+                <div className="flex items-center justify-center space-x-2 font-bold text-sm">
+                  <AlertTriangle
+                    className="w-4 h-4 text-amber-600 dark:text-amber-400"
+                    aria-hidden="true"
+                  />
                   <span>Peer disconnected from this session</span>
                 </div>
-                <p className="text-[11px] font-mono text-stone-500 dark:text-stone-400">
-                  RAM buffer cleared. Ready for next study match.
+                <p className="text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+                  Your peer left the room, so messages were cleared. No pressure — start fresh
+                  whenever you&apos;re ready.
                 </p>
                 <div className="mt-2 flex flex-wrap justify-center gap-2">
                   <button
@@ -1906,8 +1999,8 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           aiSuggestions.length > 0 && (
             <div id="ai-suggestions-bar" className="shrink-0 px-3 pb-1.5 sm:px-6 sm:pb-3">
               <div
-                className={`mx-auto max-w-3xl rounded-2xl border px-3 py-2.5 shadow-[0_10px_28px_rgba(0,0,0,0.16)] backdrop-blur-sm ${
-                  isDarkMode ? 'border-stone-700 bg-stone-950/80' : 'border-stone-200 bg-white/85'
+                className={`mx-auto max-w-3xl rounded-2xl border px-3 py-2.5 shadow-[0_10px_28px_rgba(0,0,0,0.16)] backdrop-blur-md ${
+                  isDarkMode ? 'border-stone-700 bg-stone-950/60' : 'border-stone-200 bg-white/60'
                 }`}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -2253,6 +2346,40 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                 </button>
               </div>
             )}
+            {slashMatches.length > 0 && (
+              <div
+                id="command-palette"
+                role="listbox"
+                aria-label="Chatbot commands"
+                className={`mb-1.5 overflow-hidden rounded-xl border shadow-lg ${
+                  isDarkMode ? 'border-stone-700 bg-[#17191f]' : 'border-stone-200 bg-white'
+                }`}
+              >
+                {slashMatches.map((item) => (
+                  <button
+                    key={item.command}
+                    type="button"
+                    role="option"
+                    aria-selected="true"
+                    onClick={() => applyCommandPrediction(item.command)}
+                    title={`Fill the composer with ${item.command}`}
+                    className="flex w-full items-center gap-3 px-3 py-2 text-left font-mono text-xs transition-colors hover:brightness-110"
+                    style={{ backgroundColor: `${chatTheme.accent}26` }}
+                  >
+                    <span className="shrink-0 font-bold" style={{ color: chatTheme.accent }}>
+                      {item.command}
+                    </span>
+                    <span
+                      className={`min-w-0 flex-1 truncate font-sans ${
+                        isDarkMode ? 'text-stone-400' : 'text-stone-500'
+                      }`}
+                    >
+                      {item.description}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -2323,6 +2450,12 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                 aria-describedby="composer-help"
                 onChange={handleInputChange}
                 onPaste={handleComposerPaste}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape' && slashMatches.length > 0 && slashHead) {
+                    event.stopPropagation();
+                    setDismissedHead(slashHead);
+                  }
+                }}
                 onFocus={() => setComposerEngaged(true)}
                 onBlur={(event) => {
                   if (!composerRef.current?.contains(event.relatedTarget as Node | null))

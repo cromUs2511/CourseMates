@@ -1,25 +1,51 @@
-Upgrade the existing admin system in my Coursemates app. First inspect the codebase and preserve its existing framework, authentication, and features where practical.
+CourseMates UI Upgrade Prompt
 
-Implement these improvements:
+Objective
+Improve the current matchmaking and chat experience so it feels warmer, more trustworthy, and more mobile-friendly while preserving the anonymous peer-chat product intent.
 
-1. Reported chat review
-- Let authorized admins open a report and view the relevant conversation, including enough surrounding messages to understand the context.
-- Show report details such as the reason, reporter, people involved, and report date.
--Let admins see the conversation 
+Suggested UI changes
+- Matchmaking screen
+  - Replace the plain queue state with a clearer card-based flow: "Finding a study partner…", "Ready to chat", and "Need a quick match?"
+  - Add stronger visual feedback for matching state, including subtle pulse, progress indicator, and better status text.
+  - Make interest tags feel more conversational and easier to scan, with improved spacing and less visual clutter.
+  - Keep the single action path obvious: the user should always know what to do next without reading dense text.
 
-- Let admins resolve, dismiss, or escalate reports, with confirmation for consequential actions.
+- Chat room redesign
+  - Add a more polished room header with peer status, study topic, and quick actions (theme, mute, leave).
+  - Soften the message bubble hierarchy: incoming and outgoing messages should be visually distinct but still calm and lightweight.
+  - Improve readability on mobile by increasing tap targets, reducing line length, and adding better spacing between messages and media.
+  - Add subtle "seen" or activity affordances for message flow without making the interface feel noisy or intrusive.
 
-2. Modern, responsive admin dashboard
-- Refresh the dashboard with a polished design that fits the app’s existing style.
-- Make it work well on desktop, tablet, and mobile.
-- Make reports and their statuses easy to find and manage.
-- Include clear loading, empty, error, and success states.
-- Use accessible labels and keyboard-friendly controls.
+- Theme and personalization
+  - Keep the dark mode and chat-theme system, but make the theme switcher more discoverable and easier to use.
+  - Add clearer contrast between neutral surfaces, accent states, and interactive controls to improve accessibility.
+  - Preserve reduced-motion and accessibility-first behavior in all transitions and animated states.
 
-3. Persistent database storage
-- Store records in the project’s database, or set up a suitable persistent database if none exists. Do not rely on in-memory data or temporary files for records that must survive restarts.
-- Persist reports, report statuses, relevant chat data, and admin actions as appropriate.
-- Add migrations or an equivalent schema update process, and load records from the database when the app starts.
-- Keep credentials and database configuration in environment variables; never hardcode secrets.
+- Empty and transitional states
+  - Add more intentional onboarding copy for first-time users and better empty states for waiting, reconnecting, and session expiry.
+  - Improve reconnect flows so users understand whether the room is rejoining, waiting, or closed.
+  - Use calm success/error messaging that fits the product’s anonymous and low-pressure tone.
 
-Enforce authorization on the server, validate inputs, and handle existing data safely. After implementation, summarize the changes, files modified, setup or migration steps, and any limitations.
+- Accessibility and responsiveness
+  - Ensure all labels, toggles, and form controls meet touch-friendly sizing targets for mobile screens.
+  - Improve keyboard accessibility, focus visibility, and tab order across matchmaking and chat interactions.
+  - Maintain the existing support for reduced motion, light/dark mode, and responsive viewport adjustments.
+
+Prompt for the coding agent
+
+Create a polished UI refresh for the CourseMates matchmaking and chat experience, focused on clarity, warmth, and mobile usability. Keep the existing product behavior and anonymous chat flow intact while improving the visual hierarchy and interaction design.
+
+Requirements:
+- Update the matchmaking queue and waiting states to feel more intentional and less bare.
+- Refine the chat room layout so the header, composer, message bubbles, and actions feel clearer and more premium.
+- Maintain the current functionality for anonymous matching, session persistence, themes, sound, and reconnect flows.
+- Prioritize mobile responsiveness, large tap targets, and readable spacing.
+- Keep accessibility in mind: strong contrast, visible focus states, reduced-motion support, and keyboard-friendly controls.
+- Avoid altering the server contracts or any core runtime behavior.
+- Update the relevant React components and style files only where needed.
+
+Success criteria:
+- The UI feels more polished and easier to understand without changing the app’s purpose or flow.
+- Waiting, reconnecting, and chat states are more legible and reassuring.
+- The interface remains responsive across common mobile and desktop widths.
+- Existing behavior continues to pass the relevant tests and lint/type checks.

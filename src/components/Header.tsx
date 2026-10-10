@@ -76,8 +76,8 @@ export const Header: React.FC<HeaderProps> = ({
       className={`relative shrink-0 w-full z-40 transition-colors duration-150 border-b backdrop-blur-xl ${className ?? ''} ${
         conversation
           ? isDarkMode
-            ? 'bg-[#141312]/82 border-stone-800 text-stone-100'
-            : 'bg-[#fffdfa]/82 border-stone-200 text-stone-900'
+            ? 'bg-[#141312]/60 border-stone-800 text-stone-100'
+            : 'bg-[#fffdfa]/60 border-stone-200 text-stone-900'
           : isDarkMode
             ? 'bg-[#181716]/82 border-stone-800 text-stone-100 shadow-sm'
             : 'bg-[#fffdfa]/82 border-stone-200 text-stone-900 shadow-sm'

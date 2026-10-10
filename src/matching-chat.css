@@ -104,6 +104,26 @@
 .refined-chat #chat-header .chat-header-status {
   margin-top: 0.125rem;
   font-size: 0.6875rem;
+  background-color: rgb(120 113 108 / 0.12);
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+}
+
+/* Long peer names must never clip on the left: center when the row fits,
+   start-align when it overflows. */
+.refined-chat #chat-header .chat-header-peer {
+  justify-content: safe center;
+}
+
+/* Desktop header surface: accent hairline and roomier action spacing. */
+.refined-chat #main-header {
+  border-bottom-color: color-mix(in srgb, var(--chat-accent) 25%, transparent);
+}
+
+@media (min-width: 768px) {
+  .refined-chat #chat-header .chat-actions {
+    gap: 0.5rem;
+  }
 }
 
 .refined-chat #chat-header button[aria-controls='header-settings'],
@@ -229,10 +249,266 @@
   }
 }
 
+/* Warmer queue states: gentle pulse and shimmer progress. */
+
+.matching-pulse-ring {
+  position: relative;
+}
+
+.matching-pulse-ring::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 0.9rem;
+  border: 2px solid color-mix(in srgb, var(--chat-accent) 45%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  animation: matching-ring 2.6s ease-out infinite;
+}
+
+.matching-pulse-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.matching-pulse-dot::before {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--chat-accent) 22%, transparent);
+  animation: matching-ping 1.8s ease-out infinite;
+}
+
+.matching-progress {
+  border-radius: 999px;
+}
+
+.matching-progress-fill {
+  position: relative;
+  overflow: hidden;
+}
+
+.matching-progress-fill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgb(255 255 255 / 0.45) 50%,
+    transparent 80%
+  );
+  animation: matching-shimmer 1.6s linear infinite;
+}
+
+.matching-quick-match #simulate-peer-btn {
+  min-height: 2.75rem;
+}
+
+/* Dedicated matching page: opaque and isolated while the queue runs. */
+.matching-loading-page {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2.5rem 1rem calc(1rem + env(safe-area-inset-bottom));
+  overflow-y: auto;
+}
+
+/* Same graph-paper lines as the menu, redrawn above the opaque page. */
+.matching-loading-grid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--grid-color, rgb(120 113 108 / 0.11)) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-color, rgb(120 113 108 / 0.11)) 1px, transparent 1px);
+  background-size: 48px 48px;
+  opacity: 0.7;
+}
+
+.matching-loading-card {
+  position: relative;
+  box-shadow:
+    0 24px 60px rgb(68 52 39 / 0.16),
+    0 2px 8px rgb(68 52 39 / 0.06);
+}
+
+.matching-orbit {
+  position: relative;
+  width: 5rem;
+  height: 5rem;
+  margin-inline: auto;
+}
+
+.matching-orbit-center {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 3.5rem;
+  height: 3.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--chat-accent) 34%, transparent);
+  background: color-mix(in srgb, var(--chat-accent) 9%, transparent);
+}
+
+.matching-orbit-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 2px solid color-mix(in srgb, var(--chat-accent) 45%, transparent);
+  animation: matching-ring 2.6s ease-out infinite;
+}
+
+.matching-orbit-satellite {
+  position: absolute;
+  inset: -0.25rem;
+  animation: matching-orbit 3.2s linear infinite;
+}
+
+.matching-orbit-satellite::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-left: -0.3125rem;
+  border-radius: 999px;
+  background: var(--chat-accent);
+}
+
+@keyframes matching-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes matching-ring {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.99);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes matching-ping {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.7);
+  }
+  70% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes matching-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* Chat polish: calmer bubble hierarchy, roomier mobile rhythm. */
+.refined-chat [data-message-bubble][data-media-only='false'] {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  border-radius: 1.15rem;
+  padding-inline: 1rem;
+  max-width: min(100%, 34rem);
+}
+
+.refined-chat .chat-message-row {
+  scroll-margin-block: 4rem;
+}
+
+.chat-typing-dots span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  opacity: 0.85;
+  animation: chat-typing-bounce 1.2s ease-in-out infinite;
+}
+
+.chat-typing-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.chat-typing-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes chat-typing-bounce {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  30% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
+}
+
+.refined-chat .chat-header-topic {
+  line-height: 1.2;
+}
+
+/* Touch-friendly controls: key matchmaking actions clear a 44px target while
+   the chat composer keeps its specified 40px footprint. */
+.matching-menu #start-chat-btn,
+.matching-menu #cancel-queue-btn,
+.matching-menu #normal-match-btn,
+.matching-menu #simulate-peer-btn,
+.matching-menu .matching-intent,
+.matching-menu .matching-name-action {
+  min-height: 2.75rem;
+}
+
+.refined-chat .chat-composer-tools > button,
+.refined-chat #send-message-btn {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .matching-menu #start-chat-btn,
   .refined-chat .chat-composer-form,
   .refined-chat .chat-composer-form > div {
     transition: none;
+  }
+  .matching-pulse-ring::after,
+  .matching-pulse-dot::before,
+  .matching-progress-fill::after,
+  .matching-orbit-ring,
+  .matching-orbit-satellite,
+  .chat-typing-dots span {
+    animation: none;
   }
 }

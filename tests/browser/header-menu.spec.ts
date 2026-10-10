@@ -379,6 +379,9 @@ test('chat bubbles leave breathing room below metadata while keeping compact rea
     .getByRole('textbox', { name: 'Chat message' })
     .fill('A compact message should remain comfortable to read.');
   await page.locator('#send-message-btn').click();
+  // Wait for the chatbot reply so the transcript layout is final before
+  // measuring: a message landing between the two boxes below skews the gap.
+  await expect(page.locator('.chat-message-row')).toHaveCount(2);
 
   const row = page.locator('.chat-message-row').last();
   const metadata = row.locator(':scope > div').first();
@@ -436,9 +439,8 @@ test('mobile chat header shows a compact centered identity without the matching 
   const statusBox = (await status.boundingBox())!;
   expect(nameBox.x + nameBox.width).toBeLessThanOrEqual(headerBox.x + headerBox.width);
   expect(statusBox.y).toBeGreaterThanOrEqual(nameBox.y + nameBox.height - 1);
-  expect(
-    Math.abs(nameBox.x + nameBox.width / 2 - (statusBox.x + statusBox.width / 2)),
-  ).toBeLessThanOrEqual(2);
+  // Discord-style identity: avatar, name and status share one start edge.
+  expect(Math.abs(nameBox.x - statusBox.x)).toBeLessThanOrEqual(2);
   expect(headerBox.height).toBeLessThanOrEqual(68);
 });
 
@@ -459,7 +461,7 @@ test('narrow chat header keeps the assistant name and status in one column', asy
   const badgeBox = (await badge.boundingBox())!;
   const headerBox = (await header.boundingBox())!;
 
-  await expect(name).toHaveCSS('text-align', 'center');
+  await expect(name).toHaveCSS('text-align', 'left');
   expect(badgeBox.y).toBeGreaterThanOrEqual(nameBox.y + nameBox.height - 1);
   expect(badgeBox.x).toBeGreaterThanOrEqual(headerBox.x);
   expect(badgeBox.x + badgeBox.width).toBeLessThanOrEqual(headerBox.x + headerBox.width);

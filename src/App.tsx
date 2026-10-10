@@ -315,21 +315,42 @@ export default function App() {
         />
       )}
       {error && (
-        <div
-          role="alert"
-          className="px-4 py-2 bg-red-100 text-red-900 text-sm flex justify-between gap-3"
-        >
-          {error}
-          <button onClick={() => setError('')} aria-label="Dismiss error">
-            ×
-          </button>
+        <div className="w-full shrink-0 px-3 pt-2 sm:px-6">
+          <div
+            role="alert"
+            className="mx-auto flex w-full max-w-3xl items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-2.5 text-left text-sm text-red-900 shadow-sm dark:border-red-900 dark:bg-red-950/50 dark:text-red-100"
+          >
+            <p className="min-w-0 flex-1 leading-relaxed">{error}</p>
+            <button
+              onClick={() => setError('')}
+              aria-label="Dismiss error"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-lg leading-none transition-colors hover:bg-red-100 dark:hover:bg-red-900/60"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
         </div>
       )}
       <main className="flex-1 min-h-0 w-full flex flex-col overflow-hidden relative">
         {restoring || restoringChat === 'checking' ? (
-          <p role="status" className="m-auto">
-            {restoringChat === 'checking' ? 'Reconnecting…' : 'Loading your session…'}
-          </p>
+          <div className="m-auto w-full max-w-sm px-6" role="status" aria-live="polite">
+            <div className="ui-surface rounded-2xl p-6 text-center">
+              <span
+                aria-hidden="true"
+                className="chat-theme-accent-soft mx-auto flex h-11 w-11 items-center justify-center rounded-full border"
+              >
+                <span className="matching-pulse-dot h-5 w-5 rounded-full" />
+              </span>
+              <p className="mt-3 text-sm font-bold text-stone-900 dark:text-white">
+                {restoringChat === 'checking' ? 'Rejoining your room…' : 'Warming up your session…'}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-stone-500 dark:text-stone-400">
+                {restoringChat === 'checking'
+                  ? 'Checking whether your peer is still here — this takes a moment.'
+                  : 'Keeping you anonymous while we get things ready.'}
+              </p>
+            </div>
+          </div>
         ) : !session ? (
           <AccessGateway
             onVerified={setSession}

@@ -146,7 +146,7 @@ export const AccessGateway: React.FC<AccessGatewayProps> = ({
           <p
             className={`mt-3 text-sm leading-6 ${isDarkMode ? 'text-stone-300' : 'text-stone-600'}`}
           >
-            CourseMates is an anonymous community for adults (18+) interested in student life in the
+            CourseMates is an anonymous community for students navigating student life in the
             Philippines. Connect, share experiences, and study together. Student status is not
             verified.
           </p>

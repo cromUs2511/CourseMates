@@ -97,10 +97,7 @@ for (const polling of [false, true]) {
         await expect(page.getByRole('dialog', { name: 'Game result' })).toHaveCount(0);
       expect((await read(a)).game!.round).toBe(2);
       await a.getByRole('button', { name: 'Quit the UNO game' }).click();
-      await a
-        .getByRole('dialog', { name: 'Leave the game?' })
-        .getByRole('button', { name: 'Leave table' })
-        .click();
+      await expect(a.getByRole('dialog', { name: 'Leave the game?' })).toHaveCount(0);
       await expect(a.getByRole('textbox', { name: 'Chat message' })).toBeVisible();
       await expect(b.getByText('Table closed — no winner')).toBeVisible();
       expect(errors).toEqual([]);

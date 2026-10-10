@@ -18,6 +18,7 @@ export function SafetyDialog({
   imageHashes,
   onClose,
   onBlocked,
+  onReported,
 }: {
   roomId: string;
   /** When set, the report flags this one peer message instead of the whole chat. */
@@ -27,6 +28,8 @@ export function SafetyDialog({
   imageHashes?: string[];
   onClose: () => void;
   onBlocked: () => void;
+  /** Fired once a message report succeeds, so the caller can retire that message. */
+  onReported?: (messageId: string) => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const closeRef = useRef(onClose);
@@ -76,6 +79,7 @@ export function SafetyDialog({
           ...(hashes.length ? { imageHashes: hashes.slice(0, 20) } : {}),
         });
         setSubmitted(true);
+        if (messageId) onReported?.(messageId);
       }
     } catch (error) {
       setError(

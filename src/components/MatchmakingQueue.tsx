@@ -1,20 +1,34 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   RefreshCw,
-  Loader2,
   Bot,
   ArrowRight,
-  Shield,
   Users,
   MessageCircleMore,
   Pencil,
   Check,
+  Sparkles,
+  Clock3,
+  Lightbulb,
 } from 'lucide-react';
 import { StudentSession, ActivePeerInfo, Campus, AcademicDiscipline } from '../types';
 import { SIMULATED_PEERS } from '../data/mockData';
 import { apiRequest } from '../utils/api';
 import { playChime } from '../utils/sound';
 import type { ChatTheme } from './ChatThemeMenu';
+import {
+  ACCESSORIES,
+  AVATARS,
+  BACKGROUNDS,
+  HAIR_COLORS,
+  PixelAvatar,
+  SKIN_TONES,
+  loadAvatarConfig,
+  saveAvatarConfig,
+  type AccessoryId,
+  type AvatarConfig,
+  type AvatarId,
+} from './PixelAvatar';
 import '../matching-chat.css';
 
 const MATCH_POLL_INTERVAL_MS = 400;
@@ -70,6 +84,39 @@ export const MatchmakingQueue: React.FC<MatchmakingQueueProps> = ({
   const [nameInput, setNameInput] = useState(session.customHandle ? session.sessionHandle : '');
   const [selectedIntent, setSelectedIntent] = useState<string | null>(null);
   const [interestsEnabled, setInterestsEnabled] = useState(false);
+  const [avatar, setAvatar] = useState<AvatarConfig>(() => loadAvatarConfig());
+  const [avatarStudioOpen, setAvatarStudioOpen] = useState(false);
+  type StudioTab = 'style' | 'skin' | 'hair' | 'backdrop' | 'topper';
+  const [studioTab, setStudioTab] = useState<StudioTab>('style');
+  const studioTabs: { id: StudioTab; label: string }[] = [
+    { id: 'style', label: 'Style' },
+    ...(avatar.char === 'robot'
+      ? []
+      : [
+          { id: 'skin', label: 'Skin' },
+          { id: 'hair', label: 'Hair' },
+        ]),
+    { id: 'backdrop', label: 'Backdrop' },
+    { id: 'topper', label: 'Topper' },
+  ] as { id: StudioTab; label: string }[];
+  const activeTab = studioTabs.some((tab) => tab.id === studioTab) ? studioTab : 'style';
+  const activeIndex = Math.max(
+    0,
+    studioTabs.findIndex((tab) => tab.id === activeTab),
+  );
+  const stepTab = (delta: 1 | -1) => {
+    const next = studioTabs[(activeIndex + delta + studioTabs.length) % studioTabs.length];
+    if (!next) return;
+    setStudioTab(next.id);
+    document.getElementById(`avatar-tab-${next.id}`)?.focus();
+  };
+  const updateAvatar = (patch: Partial<AvatarConfig>) => {
+    setAvatar((current) => {
+      const next = { ...current, ...patch };
+      saveAvatarConfig(next);
+      return next;
+    });
+  };
   const [canProceedNormally, setCanProceedNormally] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const attemptRef = useRef(0);
@@ -80,6 +127,26 @@ export const MatchmakingQueue: React.FC<MatchmakingQueueProps> = ({
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const showSimulateOption = isSearching && queueTime >= 3;
+  const formatQueueTime = (totalSeconds: number) => {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return minutes > 0 ? `${minutes}:${String(seconds).padStart(2, '0')}` : `${seconds}s`;
+  };
+  const queueStatusText = !isSearching
+    ? 'Ready when you are'
+    : queueTime < 8
+      ? 'Finding active study peers…'
+      : queueTime < 25
+        ? 'Finding active study peers… holding your spot in line…'
+        : 'Finding active study peers… few around — keep waiting or try a quick option below';
+  const MATCHING_TIPS = [
+    'Photos & voice unlock 90 seconds into the chat — text works right away.',
+    'You can leave anytime. Rooms clear the moment the chat ends.',
+    'Conversation starters appear at the top of every new chat.',
+    'Reporting or blocking a peer takes one tap, right from the chat header.',
+  ];
+  const [tipIndex, setTipIndex] = useState(0);
+  const loadingTitleRef = useRef<HTMLHeadingElement>(null);
 
   const clearPolling = () => {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
@@ -365,6 +432,24 @@ export const MatchmakingQueue: React.FC<MatchmakingQueueProps> = ({
     const timer = setTimeout(startMatchmaking, 0);
     return () => clearTimeout(timer);
   }, [autoSearch]);
+  useEffect(() => {
+    if (!isSearching) {
+      setTipIndex(0);
+      return;
+    }
+    loadingTitleRef.current?.focus();
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const tips = setInterval(() => setTipIndex((i) => (i + 1) % MATCHING_TIPS.length), 4000);
+    return () => clearInterval(tips);
+  }, [isSearching]);
+  useEffect(() => {
+    if (!isSearching) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') void cancelMatchmaking();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [isSearching]);
 
   const saveName = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -391,6 +476,20 @@ export const MatchmakingQueue: React.FC<MatchmakingQueueProps> = ({
       }
     >
       <div className="w-full max-w-2xl space-y-4 my-auto">
+        {/* Simple hero: what this is, in one glance. */}
+        <div className="matching-hero space-y-2.5 text-center">
+          <p className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-[11px] font-bold uppercase tracking-[0.14em] text-stone-600 dark:border-stone-700 dark:bg-stone-900/70 dark:text-stone-300">
+            <Sparkles className="chat-theme-accent-text h-3.5 w-3.5" aria-hidden="true" />
+            Anonymous study chat
+          </p>
+          <h1 className="text-balance text-2xl font-bold leading-tight tracking-tight text-stone-900 dark:text-white sm:text-3xl">
+            Find your study person.
+          </h1>
+          <p className="mx-auto max-w-md text-sm leading-relaxed text-stone-500 dark:text-stone-400">
+            Pick a vibe, hit one button, and we&apos;ll pair you with a single anonymous peer. No
+            profiles, no pressure to stay.
+          </p>
+        </div>
         {/* Identity and name controls stay together at every screen size. */}
         <div
           className={`matching-identity ui-surface rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 ${
@@ -398,46 +497,57 @@ export const MatchmakingQueue: React.FC<MatchmakingQueueProps> = ({
           }`}
         >
           <div className="flex items-center space-x-3.5 min-w-0">
+            <span
+              aria-hidden="true"
+              className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full border border-stone-200 dark:border-stone-700"
+            >
+              <PixelAvatar config={avatar} size={44} />
+            </span>
             <div className="min-w-0">
+              <span className="block text-[10px] font-bold uppercase tracking-[0.16em] text-stone-500 dark:text-stone-400">
+                Chatting as
+              </span>
               {!isEditingName ? (
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="min-h-10 max-w-full break-words rounded-lg py-2 text-left text-base font-bold tracking-tight text-stone-900 dark:text-white">
+                <div className="flex items-center gap-2">
+                  <span className="min-w-0 flex-1 break-words rounded-lg py-2 text-left text-base font-bold tracking-tight text-stone-900 dark:text-white">
                     {session.sessionHandle}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNameInput(session.customHandle ? session.sessionHandle : '');
-                      setIsEditingName(true);
-                    }}
-                    disabled={isSearching}
-                    title="Edit anonymous name"
-                    aria-label="Edit anonymous name"
-                    className="matching-name-action inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border bg-stone-50/80 p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-800/80"
-                  >
-                    <Pencil className="h-3.5 w-3.5 text-stone-600 dark:text-stone-300" />
-                  </button>
-                  {!session.customHandle && (
+                  <span className="flex shrink-0 items-center gap-2">
                     <button
                       type="button"
-                      onClick={onRerollHandle}
+                      onClick={() => {
+                        setNameInput(session.customHandle ? session.sessionHandle : '');
+                        setIsEditingName(true);
+                      }}
                       disabled={isSearching}
-                      title="Shuffle default name"
-                      className="matching-name-action chat-theme-accent-soft inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg p-1.5 border bg-stone-50/80 dark:bg-stone-800/80 transition-colors cursor-pointer shrink-0"
+                      title="Edit anonymous name"
+                      aria-label="Edit anonymous name"
+                      className="matching-name-action inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg border bg-stone-50/80 p-1.5 transition-colors disabled:cursor-not-allowed disabled:opacity-50 dark:bg-stone-800/80"
                     >
-                      <RefreshCw className="chat-theme-accent-text w-3.5 h-3.5" />
+                      <Pencil className="h-3.5 w-3.5 text-stone-600 dark:text-stone-300" />
                     </button>
-                  )}
-                  {session.customHandle && (
-                    <button
-                      type="button"
-                      onClick={onRerollHandle}
-                      disabled={isSearching}
-                      className="matching-name-action chat-theme-accent-soft rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50"
-                    >
-                      Use default name
-                    </button>
-                  )}
+                    {!session.customHandle && (
+                      <button
+                        type="button"
+                        onClick={onRerollHandle}
+                        disabled={isSearching}
+                        title="Shuffle default name"
+                        className="matching-name-action chat-theme-accent-soft inline-flex min-h-10 min-w-10 items-center justify-center rounded-lg p-1.5 border bg-stone-50/80 dark:bg-stone-800/80 transition-colors cursor-pointer shrink-0"
+                      >
+                        <RefreshCw className="chat-theme-accent-text w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {session.customHandle && (
+                      <button
+                        type="button"
+                        onClick={onRerollHandle}
+                        disabled={isSearching}
+                        className="matching-name-action chat-theme-accent-soft rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors disabled:opacity-50"
+                      >
+                        Use default name
+                      </button>
+                    )}
+                  </span>
                 </div>
               ) : (
                 <form
@@ -470,6 +580,264 @@ export const MatchmakingQueue: React.FC<MatchmakingQueueProps> = ({
                   </button>
                 </form>
               )}
+              {!isEditingName && (
+                <button
+                  type="button"
+                  onClick={() => setAvatarStudioOpen((value) => !value)}
+                  aria-expanded={avatarStudioOpen}
+                  aria-controls="avatar-studio"
+                  disabled={isSearching}
+                  className="mt-1.5 inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-stone-200 px-3 text-[11px] font-bold text-stone-600 transition-colors hover:bg-stone-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+                >
+                  <Sparkles className="chat-theme-accent-text h-3.5 w-3.5" aria-hidden="true" />
+                  {avatarStudioOpen ? 'Hide avatar studio' : 'Customize avatar'}
+                </button>
+              )}
+              {!isEditingName && avatarStudioOpen && (
+                <div
+                  id="avatar-studio"
+                  className="mt-2 space-y-2.5 border-t border-stone-200 pt-3 dark:border-stone-800"
+                >
+                  <div
+                    role="tablist"
+                    aria-label="Avatar options"
+                    className="flex flex-wrap gap-1.5"
+                    onKeyDown={(event) => {
+                      if (event.key === 'ArrowRight') stepTab(1);
+                      if (event.key === 'ArrowLeft') stepTab(-1);
+                    }}
+                  >
+                    {studioTabs.map((tab) => {
+                      const selected = activeTab === tab.id;
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          role="tab"
+                          id={`avatar-tab-${tab.id}`}
+                          aria-selected={selected}
+                          aria-controls="avatar-studio-panel"
+                          tabIndex={selected ? 0 : -1}
+                          disabled={isSearching}
+                          onClick={() => setStudioTab(tab.id)}
+                          className={`min-h-10 rounded-full border px-3 text-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                            selected
+                              ? 'chat-theme-accent-soft border-current'
+                              : 'border-stone-200 text-stone-500 dark:border-stone-700 dark:text-stone-400'
+                          }`}
+                        >
+                          {tab.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <div
+                    id="avatar-studio-panel"
+                    role="tabpanel"
+                    aria-labelledby={`avatar-tab-${activeTab}`}
+                  >
+                    {activeTab === 'style' && (
+                      <div
+                        role="radiogroup"
+                        aria-label="Avatar style"
+                        className="flex flex-wrap items-center gap-2"
+                      >
+                        <span className="w-16 shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">
+                          Style
+                        </span>
+                        {AVATARS.map((option) => {
+                          const selected = avatar.char === option.id;
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              aria-label={option.label}
+                              title={option.label}
+                              disabled={isSearching}
+                              onClick={() => updateAvatar({ char: option.id as AvatarId })}
+                              className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                selected
+                                  ? 'chat-theme-accent-soft border-current'
+                                  : 'border-stone-200 dark:border-stone-700'
+                              }`}
+                            >
+                              <PixelAvatar
+                                config={{
+                                  ...avatar,
+                                  char: option.id as AvatarId,
+                                  accessory: 'none',
+                                }}
+                                size={44}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {activeTab === 'skin' && avatar.char !== 'robot' && (
+                      <div
+                        role="radiogroup"
+                        aria-label="Skin tone"
+                        className="flex flex-wrap items-center gap-1.5"
+                      >
+                        <span className="w-16 shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">
+                          Skin
+                        </span>
+                        {SKIN_TONES.map((option) => {
+                          const selected = avatar.skin === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              aria-label={`${option.name} skin tone`}
+                              title={`${option.name} skin tone`}
+                              disabled={isSearching}
+                              onClick={() => updateAvatar({ skin: option.value })}
+                              style={{
+                                backgroundColor: option.value,
+                                boxShadow: selected
+                                  ? `0 0 0 2px ${chatTheme.lightBackground}, 0 0 0 4px ${chatTheme.accent}`
+                                  : undefined,
+                              }}
+                              className="h-10 w-10 rounded-full border border-black/15 transition disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                    {activeTab === 'hair' && avatar.char !== 'robot' && (
+                      <div
+                        role="radiogroup"
+                        aria-label="Hair color"
+                        className="flex flex-wrap items-center gap-1.5"
+                      >
+                        <span className="w-16 shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">
+                          Hair
+                        </span>
+                        {HAIR_COLORS.map((option) => {
+                          const selected = avatar.hair === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              aria-label={`${option.name} hair`}
+                              title={`${option.name} hair`}
+                              disabled={isSearching}
+                              onClick={() => updateAvatar({ hair: option.value })}
+                              style={{
+                                backgroundColor: option.value,
+                                boxShadow: selected
+                                  ? `0 0 0 2px ${chatTheme.lightBackground}, 0 0 0 4px ${chatTheme.accent}`
+                                  : undefined,
+                              }}
+                              className="h-10 w-10 rounded-full border border-black/15 transition disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                    {activeTab === 'backdrop' && (
+                      <div
+                        role="radiogroup"
+                        aria-label="Avatar background"
+                        className="flex flex-wrap items-center gap-1.5"
+                      >
+                        <span className="w-16 shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">
+                          Backdrop
+                        </span>
+                        {BACKGROUNDS.map((option) => {
+                          const selected = avatar.bg === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              aria-label={`${option.name} background`}
+                              title={`${option.name} background`}
+                              disabled={isSearching}
+                              onClick={() => updateAvatar({ bg: option.value })}
+                              style={{
+                                backgroundColor: option.value,
+                                boxShadow: selected
+                                  ? `0 0 0 2px ${chatTheme.lightBackground}, 0 0 0 4px ${chatTheme.accent}`
+                                  : undefined,
+                              }}
+                              className="h-10 w-10 rounded-full border border-black/15 transition disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                          );
+                        })}
+                      </div>
+                    )}
+                    {activeTab === 'topper' && (
+                      <div
+                        role="radiogroup"
+                        aria-label="Avatar topper"
+                        className="flex flex-wrap items-center gap-2"
+                      >
+                        <span className="w-16 shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-400 dark:text-stone-500">
+                          Topper
+                        </span>
+                        {ACCESSORIES.map((option) => {
+                          const selected = avatar.accessory === option.id;
+                          return (
+                            <button
+                              key={option.id}
+                              type="button"
+                              role="radio"
+                              aria-checked={selected}
+                              aria-label={option.id === 'none' ? 'No topper' : option.label}
+                              title={option.id === 'none' ? 'No topper' : option.label}
+                              disabled={isSearching}
+                              onClick={() => updateAvatar({ accessory: option.id as AccessoryId })}
+                              className={`flex h-11 w-11 items-center justify-center overflow-hidden rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                                selected
+                                  ? 'chat-theme-accent-soft border-current'
+                                  : 'border-stone-200 dark:border-stone-700'
+                              }`}
+                            >
+                              <PixelAvatar
+                                config={{ ...avatar, accessory: option.id as AccessoryId }}
+                                size={44}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => stepTab(-1)}
+                      disabled={isSearching || activeIndex === 0}
+                      className="min-h-10 rounded-lg border border-stone-200 px-3 text-[11px] font-bold text-stone-600 transition disabled:cursor-not-allowed disabled:opacity-40 dark:border-stone-700 dark:text-stone-300"
+                    >
+                      ← Back
+                    </button>
+                    <span
+                      aria-live="polite"
+                      className="text-[11px] font-semibold text-stone-500 dark:text-stone-400"
+                    >
+                      Step {activeIndex + 1} of {studioTabs.length}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => stepTab(1)}
+                      disabled={isSearching || activeIndex === studioTabs.length - 1}
+                      className="chat-theme-accent-button min-h-10 rounded-lg px-3 text-[11px] font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Next →
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -490,80 +858,46 @@ export const MatchmakingQueue: React.FC<MatchmakingQueueProps> = ({
           }`}
         >
           {/* Match action on top */}
-          <div className="text-center space-y-3">
-            {!isSearching ? (
-              <div className="space-y-3">
-                <button
-                  id="start-chat-btn"
-                  type="button"
-                  onClick={startMatchmaking}
-                  className="chat-theme-accent-button w-full rounded-xl py-3.5 px-6 text-white font-bold text-sm flex items-center justify-center space-x-2 transition-colors cursor-pointer"
-                >
-                  <span>Find my peers</span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
-                <div className="text-[11px] text-stone-500 dark:text-stone-400 flex items-center justify-center space-x-1.5">
-                  <Shield className="chat-theme-accent-text w-3.5 h-3.5" />
-                  <span>Private rooms • Messages cleared when the chat ends</span>
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-xl p-5 border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-900/60 space-y-3">
-                <div className="flex items-center justify-center space-x-2">
-                  <Loader2 className="chat-theme-accent-text w-4 h-4 animate-spin motion-reduce:animate-none" />
-                  <span className="font-semibold text-xs text-stone-800 dark:text-stone-200">
-                    Finding active study peers... ({queueTime}s)
-                  </span>
-                </div>
-
-                <div className="w-full bg-stone-200 dark:bg-stone-800 h-1.5 overflow-hidden">
-                  <div
-                    className="chat-theme-accent-button h-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, (queueTime % 6) * 20 + 20)}%` }}
-                  />
-                </div>
-
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
-                  <button
-                    id="cancel-queue-btn"
-                    type="button"
-                    onClick={cancelMatchmaking}
-                    className="w-full sm:w-auto px-4 py-2 border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-800 text-xs text-stone-700 dark:text-stone-300 hover:bg-stone-50 cursor-pointer"
-                  >
-                    Cancel Search
-                  </button>
-
-                  {canProceedNormally && (
-                    <button
-                      id="normal-match-btn"
-                      type="button"
-                      onClick={proceedWithNormalMatching}
-                      className="chat-theme-accent-button w-full sm:w-auto rounded-lg px-4 py-2 text-white text-xs font-bold cursor-pointer"
-                    >
-                      Proceed with normal matching
-                    </button>
-                  )}
-
-                  {showSimulateOption && (
-                    <button
-                      id="simulate-peer-btn"
-                      type="button"
-                      onClick={pairWithSimulatedPeer}
-                      className="chat-theme-accent-button w-full sm:w-auto px-4 py-2 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center space-x-1.5 cursor-pointer"
-                    >
-                      <Bot className="w-4 h-4" />
-                      <span>Try Student Chatbot Assistant</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+          {!isSearching && (
+            <div className="matching-ready space-y-3 text-center">
+              <p className="mx-auto inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-white/70 px-3 py-1.5 text-[11px] font-semibold text-stone-600 dark:border-stone-700 dark:bg-stone-900/70 dark:text-stone-300">
+                <Sparkles className="chat-theme-accent-text h-3.5 w-3.5" aria-hidden="true" />
+                Ready to chat — takes about a minute
+              </p>
+              <button
+                id="start-chat-btn"
+                type="button"
+                onClick={startMatchmaking}
+                className="chat-theme-accent-button matching-pulse-ring w-full rounded-xl py-3.5 px-6 text-white font-bold text-sm flex items-center justify-center space-x-2 transition-colors cursor-pointer"
+              >
+                <span>Find my peers</span>
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
+              </button>
+              <p className="mx-auto max-w-md text-balance text-[11px] leading-relaxed text-stone-500 dark:text-stone-400">
+                Anonymous &amp; private — rooms clear when the chat ends.
+              </p>
+            </div>
+          )}
 
           {error && (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-              {error}
-            </p>
+            <div
+              role="alert"
+              className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-3.5 py-3 text-left text-sm leading-relaxed text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
+            >
+              <span
+                aria-hidden="true"
+                className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-200"
+              >
+                !
+              </span>
+              <p className="min-w-0 flex-1">
+                <span className="block font-semibold">That didn&apos;t go through</span>
+                <span className="mt-0.5 block text-[13px] font-normal">{error}</span>
+                <span className="mt-1 block text-xs font-normal opacity-80">
+                  Take a breath — nothing was lost. Try again when you&apos;re ready.
+                </span>
+              </p>
+            </div>
           )}
 
           {/* Optional interests below, gated by a checkmark toggle */}
@@ -573,11 +907,6 @@ export const MatchmakingQueue: React.FC<MatchmakingQueueProps> = ({
                 <h2 className="text-xl font-bold leading-snug tracking-tight text-stone-900 dark:text-white">
                   What kind of chat do you want? (optional)
                 </h2>
-                <p className="text-sm text-stone-500 dark:text-stone-400 mt-1">
-                  {interestsEnabled
-                    ? 'Pick one to match with similar peers, or uncheck to meet anyone.'
-                    : 'Check the box to match by interest, or just hit Find my peers.'}
-                </p>
               </div>
             </div>
 
@@ -657,11 +986,113 @@ export const MatchmakingQueue: React.FC<MatchmakingQueueProps> = ({
             </div>
           </div>
         </div>
-
-        <p className="text-center text-xs text-stone-500 dark:text-stone-400">
-          Match with a peer to chat, share music, or invite them to UNO and Tic Tac Toe.
-        </p>
       </div>
+      {/* Dedicated matching page: fully opaque and isolated while the queue runs. */}
+      {isSearching && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="matching-loading-title"
+          aria-busy="true"
+          className="matching-loading-page"
+          style={{
+            backgroundColor: isDarkMode ? chatTheme.darkBackground : chatTheme.lightBackground,
+          }}
+        >
+          <div aria-hidden="true" className="matching-loading-grid" />
+          <div className="matching-loading-card ui-surface my-auto w-full max-w-md rounded-2xl p-6 text-center sm:p-8">
+            <div aria-hidden="true" className="matching-orbit">
+              <span className="matching-orbit-ring" />
+              <span className="matching-orbit-center">
+                <Users className="chat-theme-accent-text h-6 w-6" />
+              </span>
+              <span className="matching-orbit-satellite" />
+            </div>
+            <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.18em] text-stone-400 dark:text-stone-500">
+              Step 2 of 3 • Finding your partner
+            </p>
+            <h2
+              id="matching-loading-title"
+              ref={loadingTitleRef}
+              tabIndex={-1}
+              className="mt-1.5 text-xl font-bold leading-snug tracking-tight text-stone-900 outline-none dark:text-white"
+            >
+              {queueStatusText}
+            </h2>
+            <p className="mt-1.5 flex items-center justify-center gap-1.5 text-xs font-medium text-stone-500 dark:text-stone-400">
+              <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
+              Waiting {formatQueueTime(queueTime)} • we&apos;ll chime when someone joins
+            </p>
+            <div
+              role="progressbar"
+              aria-label="Searching for a study partner"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={Math.min(100, (queueTime % 6) * 20 + 20)}
+              className="matching-progress mt-4 h-2 w-full overflow-hidden rounded-full bg-stone-200 dark:bg-stone-800"
+            >
+              <div
+                className="chat-theme-accent-button matching-progress-fill h-full rounded-full transition-all duration-300"
+                style={{ width: `${Math.min(100, (queueTime % 6) * 20 + 20)}%` }}
+              />
+            </div>
+            <p
+              aria-live="polite"
+              className="matching-tip mx-auto mt-4 flex min-h-8 max-w-sm items-start justify-center gap-1.5 text-[11px] leading-relaxed text-stone-500 dark:text-stone-400"
+            >
+              <Lightbulb
+                className="chat-theme-accent-text mt-px h-3.5 w-3.5 shrink-0"
+                aria-hidden="true"
+              />
+              <span>{MATCHING_TIPS[tipIndex]}</span>
+            </p>
+            <div className="mt-5 flex flex-col items-stretch justify-center gap-2 sm:flex-row">
+              <button
+                id="cancel-queue-btn"
+                type="button"
+                onClick={cancelMatchmaking}
+                className="w-full rounded-xl border border-stone-300 bg-white px-4 py-2 text-xs font-semibold text-stone-700 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-800 dark:text-stone-300 sm:w-auto"
+              >
+                Cancel Search
+              </button>
+              {canProceedNormally && (
+                <button
+                  id="normal-match-btn"
+                  type="button"
+                  onClick={proceedWithNormalMatching}
+                  className="chat-theme-accent-button w-full rounded-xl px-4 py-2 text-xs font-bold text-white sm:w-auto"
+                >
+                  Proceed with normal matching
+                </button>
+              )}
+            </div>
+            <p className="mt-3 text-[11px] text-stone-400 dark:text-stone-500">
+              Press Escape to cancel anytime.
+            </p>
+            {showSimulateOption && (
+              <div className="matching-quick-match mt-4 rounded-xl border border-dashed border-stone-300 bg-white/70 p-3 text-left dark:border-stone-700 dark:bg-stone-900/70 sm:p-4">
+                <p className="flex items-center gap-1.5 text-xs font-bold text-stone-800 dark:text-stone-100">
+                  <Bot className="chat-theme-accent-text h-4 w-4" aria-hidden="true" />
+                  Need a quick match?
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-stone-500 dark:text-stone-400">
+                  Quiet right now? Warm up with the student chatbot — you can still find a human
+                  peer after.
+                </p>
+                <button
+                  id="simulate-peer-btn"
+                  type="button"
+                  onClick={pairWithSimulatedPeer}
+                  className="chat-theme-accent-button mt-2 flex w-full items-center justify-center space-x-1.5 px-4 py-2 text-xs font-bold uppercase tracking-wider text-white sm:w-auto"
+                >
+                  <Bot className="h-4 w-4" aria-hidden="true" />
+                  <span>Try Student Chatbot Assistant</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
