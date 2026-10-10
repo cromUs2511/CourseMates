@@ -153,8 +153,18 @@ test('a provider outage caps concurrency, opens a circuit and recovers after the
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
+  // Gate on the first request actually entering the handler: a fixed sleep is
+  // racy (a slow loopback lets the second request grab the slot instead and
+  // both requests end up parked on `held` forever).
+  let enterFirst = () => {};
+  const entered = new Promise<void>((resolve) => {
+    enterFirst = resolve;
+  });
+  let enteredCount = 0;
 
   app.get('/api/ai/outage', providerGuard(1, now), async (_req, res) => {
+    enteredCount += 1;
+    if (enteredCount === 1) enterFirst();
     if (mode === 'hold') await held;
     if (mode === 'fail') {
       res.status(500).json({ error: 'provider unavailable' });
@@ -167,7 +177,7 @@ test('a provider outage caps concurrency, opens a circuit and recovers after the
     // A busy provider refuses the next caller instead of queueing work forever.
     mode = 'hold';
     const inFlight = fetch(base + '/api/ai/outage');
-    await new Promise((resolve) => setTimeout(resolve, 25));
+    await entered;
     const refused = await fetch(base + '/api/ai/outage');
     assert.equal(refused.status, 503);
     assert.equal(refused.headers.get('retry-after'), '30');
