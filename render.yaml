@@ -1,0 +1,43 @@
+# Render blueprint: full-stack CourseMates (Express + Vite + WebSocket).
+# Apply via "New + / Blueprint" or let Render auto-detect this file.
+# Fill the `sync: false` values in the dashboard after the first deploy,
+# then redeploy so APP_URL matches the assigned https://*.onrender.com URL.
+services:
+  - type: web
+    name: coursemates
+    runtime: node
+    plan: free
+    region: singapore
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /api/health/ready
+    numInstances: 1
+    envVars:
+      - key: NODE_VERSION
+        value: 22.14.0
+      - key: NODE_ENV
+        value: production
+      - key: LOAD_LOCAL_ENV
+        value: false
+      - key: HOST
+        value: 0.0.0.0
+      - key: SINGLE_INSTANCE
+        value: true
+      - key: TRUST_PROXY_HOPS
+        value: 1
+      # Free plan has no persistent disks, so this is ephemeral storage.
+      # On a paid plan, attach a disk and point DATA_DIR at its mount path.
+      - key: DATA_DIR
+        value: /tmp/coursemates-data
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: APP_URL
+        sync: false
+      - key: MODERATION_SECRET
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: YOUTUBE_API_KEY
+        sync: false
