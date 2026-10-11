@@ -640,7 +640,7 @@ export function AdminDashboard({ isDarkMode }: { isDarkMode: boolean }) {
 
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div
-            role="tablist"
+            role="group"
             aria-label="Report status filter"
             className={`inline-flex max-w-full flex-wrap gap-1 rounded-lg border p-1 ${isDarkMode ? 'border-stone-700' : 'border-stone-300'}`}
           >
@@ -648,8 +648,7 @@ export function AdminDashboard({ isDarkMode }: { isDarkMode: boolean }) {
               <button
                 key={item}
                 type="button"
-                role="tab"
-                aria-selected={filter === item}
+                aria-pressed={filter === item}
                 onClick={() => setFilter(item)}
                 className={`rounded-md px-3 py-2 text-sm font-semibold capitalize ${filter === item ? 'chat-theme-accent-button border-transparent text-white' : `${muted} hover:text-stone-900 dark:hover:text-white`}`}
               >
@@ -669,7 +668,6 @@ export function AdminDashboard({ isDarkMode }: { isDarkMode: boolean }) {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search handle, topic, reason, IP…"
-                aria-label="Search reports"
                 style={scheme}
                 className={`w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none focus:border-red-700 ${inputCls}`}
               />
@@ -1010,7 +1008,11 @@ export function AdminDashboard({ isDarkMode }: { isDarkMode: boolean }) {
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6">
               {detailLoading && (
-                <p role="status" className="py-10 text-center text-sm text-stone-500">
+                <p
+                  role="status"
+                  aria-live="polite"
+                  className="py-10 text-center text-sm text-stone-500"
+                >
                   Loading conversation…
                 </p>
               )}

@@ -6,8 +6,10 @@ mode.
 """
 
 from typing import Literal
+import hmac
+import os
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 from .matching import select_legacy_match
@@ -15,6 +17,20 @@ from .native_core import native_status
 from .moderation import moderate_text
 
 app = FastAPI(title="CourseMates Python Orchestrator", version="1.0.0")
+
+
+def _expected_internal_token() -> str:
+    return os.environ.get("ORCHESTRATOR_INTERNAL_TOKEN", "")
+
+
+async def require_internal_token(
+    x_cm_internal_token: str | None = Header(default=None, alias="X-CM-Internal-Token"),
+) -> None:
+    expected = _expected_internal_token()
+    if not expected:
+        return
+    if x_cm_internal_token is None or not hmac.compare_digest(x_cm_internal_token, expected):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="unauthorized")
 
 
 class IcebreakerRequest(BaseModel):
@@ -59,7 +75,7 @@ def health() -> dict[str, object]:
     }
 
 
-@app.post("/internal/v1/icebreakers", response_model=IcebreakerResponse)
+@app.post("/internal/v1/icebreakers", response_model=IcebreakerResponse, dependencies=[Depends(require_internal_token)])
 def icebreakers(request: IcebreakerRequest) -> IcebreakerResponse:
     topic = request.topic.strip() or "your current study topic"
     return IcebreakerResponse(icebreakers=[
@@ -70,7 +86,7 @@ def icebreakers(request: IcebreakerRequest) -> IcebreakerResponse:
     ])
 
 
-@app.post("/internal/v1/match/select")
+@app.post("/internal/v1/match/select", dependencies=[Depends(require_internal_token)])
 def match_select(request: MatchSelectionRequest) -> dict[str, object]:
     return {
         "contractVersion": 1,
@@ -81,7 +97,7 @@ def match_select(request: MatchSelectionRequest) -> dict[str, object]:
     }
 
 
-@app.post("/internal/v1/moderation")
+@app.post("/internal/v1/moderation", dependencies=[Depends(require_internal_token)])
 def moderation(request: ModerationRequest) -> dict[str, object]:
     """Shadow comparison only; Node remains the browser enforcement boundary."""
     return {"contractVersion": 1, **moderate_text(request.text)}

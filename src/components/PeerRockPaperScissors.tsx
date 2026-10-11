@@ -103,9 +103,9 @@ export const PeerRockPaperScissors = forwardRef<
     if (!open || !game) return;
     const previous = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current!;
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
     return () => {
-      dialog.close();
+      if (dialog.open) dialog.close();
       previous?.focus({ preventScroll: true });
     };
   }, [open, game?.id]);

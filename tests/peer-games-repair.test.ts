@@ -5,6 +5,7 @@ import http from 'node:http';
 import { attachRuntime, issueSession } from '../runtime';
 import { PeerChess } from '../chess';
 import { PeerRockPaperScissors } from '../rps';
+import { PeerTicTacToe } from '../ticTacToe';
 import { PeerTrivia } from '../trivia';
 import { PeerWouldYouRather } from '../wouldYouRather';
 import { PeerConnectFour } from '../connectFour';
@@ -430,7 +431,13 @@ test('connect four records the last move and detects a horizontal win', () => {
   );
   const id = game.snapshot().game!.id;
   const drop = (actor: string, column: number) =>
-    game.act(actor, peers, { action: 'move', gameId: id, round: 1, revision: 0, column } as never);
+    game.act(actor, peers, {
+      action: 'move',
+      gameId: id,
+      round: 1,
+      revision: game.snapshot().revision,
+      column,
+    } as never);
   drop('a', 0);
   assert.deepEqual(game.snapshot().game!.lastMove, { row: 5, col: 0 });
   drop('b', 0);
@@ -642,5 +649,171 @@ test('only one peer game can be active per room', async () => {
     assert.match(unoBlockedAgain.data.error, /Rock Paper Scissors/);
   } finally {
     await request('/api/match/cancel', a, {});
+  }
+});
+test('connect four rejects a stale revision so concurrent moves cannot collide', () => {
+  const game = new PeerConnectFour();
+  startGame(
+    game,
+    { action: 'invite' } as never,
+    (invitationId) => ({ action: 'respond', invitationId, accept: true }) as never,
+  );
+  const id = game.snapshot().game!.id;
+  const stale = game.snapshot().revision;
+  game.act('a', peers, {
+    action: 'move',
+    gameId: id,
+    round: 1,
+    revision: stale,
+    column: 0,
+  } as never);
+  assert.throws(
+    () =>
+      game.act('b', peers, {
+        action: 'move',
+        gameId: id,
+        round: 1,
+        revision: stale,
+        column: 1,
+      } as never),
+    /board changed/,
+  );
+  game.act('b', peers, {
+    action: 'move',
+    gameId: id,
+    round: 1,
+    revision: game.snapshot().revision,
+    column: 1,
+  } as never);
+  assert.equal(game.snapshot().game!.board[5]![1], 'yellow');
+});
+
+test('tic-tac-toe rejects a move from someone outside the match', () => {
+  const game = new PeerTicTacToe();
+  startGame(
+    game,
+    { action: 'invite' } as never,
+    (invitationId) => ({ action: 'respond', invitationId, accept: true }) as never,
+  );
+  const id = game.snapshot().game!.id;
+  assert.throws(
+    () =>
+      game.act(
+        'mallory',
+        [
+          { id: 'mallory', handle: 'Mallory' },
+          { id: 'a', handle: 'Alice' },
+        ],
+        {
+          action: 'move',
+          gameId: id,
+          round: 1,
+          revision: game.snapshot().revision,
+          square: 0,
+        } as never,
+      ),
+    /two current chat participants/,
+  );
+});
+
+test('rps rejects a rematch before the match ends', () => {
+  const game = new PeerRockPaperScissors();
+  startGame(
+    game,
+    { action: 'invite' } as never,
+    (invitationId) => ({ action: 'respond', invitationId, accept: true }) as never,
+  );
+  const id = game.snapshot().game!.id;
+  game.act('a', peers, {
+    action: 'choose',
+    gameId: id,
+    round: 1,
+    revision: 0,
+    choice: 'rock',
+  } as never);
+  game.act('b', peers, {
+    action: 'choose',
+    gameId: id,
+    round: 1,
+    revision: 0,
+    choice: 'scissors',
+  } as never);
+  assert.equal(game.snapshot().game!.turn, 'revealing');
+  assert.throws(
+    () => game.act('a', peers, { action: 'rematch', gameId: id, round: 1 } as never),
+    /Finish this match/,
+  );
+});
+
+test('wyr rejects invalid choices and a rematch before the final question', () => {
+  const game = new PeerWouldYouRather();
+  startGame(
+    game,
+    { action: 'invite', category: 'Random' } as never,
+    (invitationId) => ({ action: 'respond', invitationId, accept: true }) as never,
+  );
+  const id = game.snapshot().game!.id;
+  assert.throws(
+    () =>
+      game.act('a', peers, {
+        action: 'choose',
+        gameId: id,
+        round: 1,
+        revision: 0,
+        choice: 'C',
+      } as never),
+    /two options/,
+  );
+  game.act('a', peers, {
+    action: 'choose',
+    gameId: id,
+    round: 1,
+    revision: 0,
+    choice: 'A',
+  } as never);
+  game.act('b', peers, {
+    action: 'choose',
+    gameId: id,
+    round: 1,
+    revision: 0,
+    choice: 'B',
+  } as never);
+  assert.equal(game.snapshot().game!.phase, 'revealing');
+  assert.throws(
+    () => game.act('a', peers, { action: 'rematch', gameId: id, round: 1 } as never),
+    /Finish this match/,
+  );
+});
+
+test('trivia deals unique questions with no duplicates', () => {
+  // 'general' holds 8 prompts, so a general match deals 8; richer pools deal 10.
+  for (const [category, expected] of [
+    ['general', 8],
+    ['science', 10],
+    ['random', 10],
+  ] as const) {
+    const game = new PeerTrivia();
+    startGame(
+      game,
+      { action: 'invite', category } as never,
+      (invitationId) => ({ action: 'respond', invitationId, accept: true }) as never,
+    );
+    const questions = game.snapshot().game!.questions;
+    assert.equal(questions.length, expected);
+    assert.equal(new Set(questions.map((q) => q.id)).size, expected);
+  }
+});
+
+test('wyr deals ten unique prompts even for short or unknown categories', () => {
+  for (const category of ['Random', 'Funny', 'Bogus'] as const) {
+    const game = new PeerWouldYouRather();
+    startGame(
+      game,
+      { action: 'invite', category } as never,
+      (invitationId) => ({ action: 'respond', invitationId, accept: true }) as never,
+    );
+    const questions = game.snapshot().game!.questions;
+    assert.equal(questions.length, 10);
+    assert.equal(new Set(questions.map((q) => q.id)).size, 10);
   }
 });

@@ -49,12 +49,17 @@ export const VoiceMessagePlayer = React.memo(function VoiceMessagePlayer({
   };
   const seekWithKeyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
-    if (!audio || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+    if (!audio || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const next = Math.max(
-      0,
-      Math.min(duration, audio.currentTime + (event.key === 'ArrowRight' ? 5 : -5)),
-    );
+    const next =
+      event.key === 'Home'
+        ? 0
+        : event.key === 'End'
+          ? duration
+          : Math.max(
+              0,
+              Math.min(duration, audio.currentTime + (event.key === 'ArrowRight' ? 5 : -5)),
+            );
     audio.currentTime = next;
     setCurrentTime(next);
   };

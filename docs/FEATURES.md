@@ -84,6 +84,15 @@ secret words, draws for 60 seconds, and the other player guesses. A correct gues
 gives both players 100 points, and the guesser earns up to 60 more for speed.
 Tools: ten colors, three brush sizes, eraser, undo and clear.
 
+### UNO house rules
+
+UNO calls are automatic when a player reaches one card; the explicit call is
+flavor and the missed-call penalty applies when the call flag is lost (for
+example after drawing penalty cards). Wild and Wild +4 may be played on any
+turn without a color-holding restriction or challenge step, and +2/+4 penalties
+are not stackable: the victim draws and loses the turn. Rematches at a finished
+table need both seats to agree.
+
 ## 6. Look and feel
 
 - **Light and dark mode** with an animated reveal.
@@ -100,8 +109,9 @@ Tools: ten colors, three brush sizes, eraser, undo and clear.
 - **Text filter** blocks messages that break the community rules, including music
   titles and notes.
 - **Privacy by design.** Messages and media live only in memory, are never
-  logged, and vanish when the room ends or the server restarts. Reports store a
-  hashed actor and an IP, never message text.
+  logged, and vanish when the room ends or the server restarts. Filing a report
+  saves a limited review excerpt (up to the 50 most recent message texts, no
+  media bytes) with a hashed actor and an IP, retained up to 30 days.
 - **Admin dashboard** (`/api/admin`) lets moderators review reports, ban users
   and see live metrics. It is protected by an admin login.
 

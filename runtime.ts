@@ -1634,8 +1634,11 @@ export function attachRuntime(
       const session = authenticate(req)!;
       const room = requireRoom(session, req.body.roomId);
       if (!room || !safety) return res.status(404).json({ error: 'Chat ended or is unavailable.' });
-      const peer = identities.get(room.peers.find((p) => p.id !== session.id)!.id)!;
       try {
+        const otherPeer = room.peers.find((p) => p.id !== session.id);
+        const peer = otherPeer ? identities.get(otherPeer.id) : undefined;
+        if (!otherPeer || !peer)
+          return res.status(404).json({ error: 'Chat ended or is unavailable.' });
         if (action === 'report') {
           const reason =
             req.body.reason === undefined || req.body.reason === ''

@@ -60,6 +60,11 @@ function toAlgebraic(square: [number, number]): string {
   return String.fromCharCode(97 + square[1]) + (8 - square[0]);
 }
 
+/** Repetition-relevant position key: FEN without the move clocks. */
+function positionKey(fen: string): string {
+  return fen.split(' ').slice(0, 4).join(' ');
+}
+
 export class PeerChess {
   private state: ChessState = { revision: 0, invitation: null, game: null, leftBy: null };
   // Who played White last. Survives game teardown so the next game flips roles.
@@ -120,6 +125,7 @@ export class PeerChess {
           })),
           board: chessToBoard(chess),
           fen: chess.fen(),
+          positionHistory: [positionKey(chess.fen())],
           turn: 'white',
           result: null,
           inCheck: null,
@@ -164,6 +170,7 @@ export class PeerChess {
           const newChess = new Chess();
           game.board = chessToBoard(newChess);
           game.fen = newChess.fen();
+          game.positionHistory = [positionKey(newChess.fen())];
           game.turn = 'white';
           game.result = null;
           game.inCheck = null;
@@ -173,9 +180,12 @@ export class PeerChess {
         }
       } else if (action.action === 'move') {
         if (game.result) throw new Error('This round is over.');
-        if (game.drawOfferedBy) throw new Error('A draw has been offered. Respond first.');
+        // A pending draw offer never blocks play: moving implicitly declines
+        // it so a peer cannot freeze the game by offering a draw on your turn.
+        if (game.drawOfferedBy) game.drawOfferedBy = null;
 
-        const player = game.players.find((p) => p.id === actor)!;
+        const player = game.players.find((p) => p.id === actor);
+        if (!player) throw new Error('This game is for the two current chat participants.');
         // The engine position is the source of truth for whose turn it is:
         // White opens, then Black always replies.
         const turnColor: ChessPieceColor = chess.turn() === 'w' ? 'white' : 'black';
@@ -197,6 +207,7 @@ export class PeerChess {
 
           game.board = chessToBoard(chess);
           game.fen = chess.fen();
+          game.positionHistory = [...(game.positionHistory ?? []), positionKey(chess.fen())];
           game.turn = chess.turn() === 'w' ? 'white' : 'black';
           game.lastMove = {
             from: action.from,
@@ -210,13 +221,21 @@ export class PeerChess {
           if (chess.isCheckmate()) {
             game.result = { winnerId: actor, reason: 'checkmate' };
             game.inCheck = null;
-          } else if (
-            chess.isStalemate() ||
-            chess.isDraw() ||
-            chess.isThreefoldRepetition() ||
-            chess.isInsufficientMaterial()
-          ) {
+          } else if (chess.isStalemate()) {
             game.result = { winnerId: null, reason: 'stalemate' };
+            game.inCheck = null;
+          } else if (
+            // chess.js history is rebuilt from a bare FEN each move, so its
+            // repetition counter never fires here; count from our own log.
+            game.positionHistory.filter((key) => key === positionKey(chess.fen())).length >= 3
+          ) {
+            game.result = { winnerId: null, reason: 'threefold-repetition' };
+            game.inCheck = null;
+          } else if (chess.isInsufficientMaterial()) {
+            game.result = { winnerId: null, reason: 'insufficient-material' };
+            game.inCheck = null;
+          } else if (chess.isDraw()) {
+            game.result = { winnerId: null, reason: 'fifty-move-draw' };
             game.inCheck = null;
           } else if (chess.isCheck()) {
             game.inCheck = chess.turn() === 'w' ? 'white' : 'black';
@@ -243,7 +262,8 @@ export class PeerChess {
         }
       } else if (action.action === 'resign') {
         if (game.result) throw new Error('This round is over.');
-        const opponent = game.players.find((p) => p.id !== actor)!;
+        const opponent = game.players.find((p) => p.id !== actor);
+        if (!opponent) throw new Error('This game is for the two current chat participants.');
         game.result = { winnerId: opponent.id, reason: 'resignation' };
       } else throw new Error('Invalid game action.');
     }

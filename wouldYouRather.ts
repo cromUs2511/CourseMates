@@ -253,6 +253,24 @@ const WYR_QUESTIONS: WyrQuestion[] = [
   },
 ];
 
+const WYR_CATEGORIES: ReadonlySet<string> = new Set([
+  'Funny',
+  'Random',
+  'Gaming',
+  'School',
+  'Technology',
+  'Difficult Choices',
+]);
+
+function normalizeWyrCategory(category: unknown): string {
+  if (typeof category !== 'string') return 'Random';
+  const trimmed = category.trim();
+  for (const valid of WYR_CATEGORIES) {
+    if (valid.toLowerCase() === trimmed.toLowerCase()) return valid;
+  }
+  return 'Random';
+}
+
 function getQuestions(category: string, count: number = 10): WyrQuestion[] {
   let pool: WyrQuestion[];
   if (category === 'random') {
@@ -260,10 +278,23 @@ function getQuestions(category: string, count: number = 10): WyrQuestion[] {
   } else {
     pool = WYR_QUESTIONS.filter((q) => q.category === category);
     if (pool.length < count) {
-      pool = [...pool, ...WYR_QUESTIONS.filter((q) => q.category === 'Random')];
+      // Top up from the full bank (deduped) so every match deals `count`
+      // unique prompts instead of repeating the short category.
+      const seen = new Set(pool.map((q) => q.id));
+      for (const q of WYR_QUESTIONS) {
+        if (seen.has(q.id)) continue;
+        seen.add(q.id);
+        pool.push(q);
+        if (pool.length >= count) break;
+      }
     }
   }
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  // Fisher-Yates with crypto randomness: uniform, unbiased selection.
+  const shuffled = [...pool];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
   return shuffled.slice(0, count);
 }
 
@@ -311,7 +342,7 @@ export class PeerWouldYouRather {
         fromHandle: peers.find((peer) => peer.id === actor)!.handle,
         expiresAt: Date.now() + 90000,
       };
-      this.pendingCategory = action.category;
+      this.pendingCategory = normalizeWyrCategory(action.category);
       state.leftBy = null;
     } else if (action.action === 'respond') {
       const invitation = state.invitation;
@@ -350,7 +381,7 @@ export class PeerWouldYouRather {
         throw new Error('That round is no longer available.');
 
       if (action.action === 'rematch') {
-        if (!game.result) throw new Error('Finish this round first.');
+        if (game.phase !== 'round-end' || !game.result) throw new Error('Finish this match first.');
         if (game.rematch.includes(actor)) return;
         game.rematch.push(actor);
         if (game.rematch.length === 2) {
@@ -366,7 +397,8 @@ export class PeerWouldYouRather {
       } else if (action.action === 'choose') {
         if (game.phase !== 'choosing') throw new Error('Not time to choose.');
         if (game.choices[actor]) throw new Error('You have already chosen.');
-
+        if (action.choice !== 'A' && action.choice !== 'B')
+          throw new Error('Choose one of the two options.');
         game.choices[actor] = action.choice;
 
         if (Object.keys(game.choices).length === 2) {

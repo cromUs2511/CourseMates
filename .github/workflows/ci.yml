@@ -21,6 +21,7 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run format:check
+      - run: npm run scan:secrets
       - run: npm run test:coverage
       - run: npm run build
       - name: Dependency audit
@@ -51,6 +52,7 @@ jobs:
 
   python:
     name: python shadow service
+    needs: checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -63,6 +65,7 @@ jobs:
 
   native:
     name: native module (build, smoke, boundary, sanitizer)
+    needs: checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -88,6 +91,7 @@ jobs:
 
   container:
     name: container images
+    needs: checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

@@ -24,7 +24,9 @@ export function reconcileMessageSnapshot(
         ? existing
         : normalized;
     }),
-  ].slice(-501);
+  ]
+    .sort((a, b) => a.timestamp - b.timestamp || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    .slice(-501);
   return next.length === previous.length &&
     next.every((message, index) => message === previous[index])
     ? previous

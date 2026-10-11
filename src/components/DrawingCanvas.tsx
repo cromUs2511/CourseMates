@@ -88,7 +88,11 @@ export function DrawingCanvas({
     callbacks.current.onSyncChange(false);
   }, []);
   useEffect(() => {
-    reset();
+    // Undo/clear bumps canvasVersion; a remote update can land mid-gesture.
+    // Never drop an active stroke here: its batches fail with 'canvas
+    // changed' and the parent rebases + retries them onto the fresh version.
+    // Only abort when drawing is disabled (turn over) or when idle.
+    if (!gesture.current || !enabled) reset();
   }, [canvasVersion, enabled, reset]);
   useEffect(
     () => () => {

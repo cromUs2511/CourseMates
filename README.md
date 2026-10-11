@@ -427,6 +427,13 @@ Then opt in from `.env.local` with `PYTHON_ORCHESTRATOR_MODE=shadow`. Leave it a
 `off` for the default behavior. Promotion to an authoritative path requires
 contract, replay and side-by-side parity evidence.
 
+Optional shared-secret auth: set `ORCHESTRATOR_INTERNAL_TOKEN` for the Python
+service and the same value as `PYTHON_ORCHESTRATOR_TOKEN` for Node. When the
+Python token is set, the three `POST /internal/v1/*` routes require the
+`X-CM-Internal-Token` header (constant-time compare, otherwise 401);
+`GET /internal/v1/health` stays open. Empty on both sides (the local-dev
+default) leaves the internal API open.
+
 ### Docker
 
 `docker compose up --build` starts the Node web/realtime edge and the Python

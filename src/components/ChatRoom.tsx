@@ -82,6 +82,24 @@ const PRESENCE_LABELS: Record<PeerPresence, string> = {
   offline: 'Offline',
 };
 const messageTimeFormatter = new Intl.DateTimeFormat([], { hour: '2-digit', minute: '2-digit' });
+const messageDayFormatter = new Intl.DateTimeFormat([], {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+});
+const dayKey = (timestamp: number) => {
+  const date = new Date(timestamp);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+};
+const dayLabel = (timestamp: number) => {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOf(now) - startOf(date)) / 86400000);
+  if (diffDays <= 0) return 'Today';
+  if (diffDays === 1) return 'Yesterday';
+  return messageDayFormatter.format(date);
+};
 const formatVoiceDuration = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
 
@@ -289,6 +307,12 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
   const sendingRef = useRef(false);
   const receivedMessageIds = useRef(new Set<string>());
   const peerTypingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const musicRetryRef = useRef<{
+    trackId: string;
+    caption: string;
+    replyId?: string;
+    id: string;
+  } | null>(null);
   const snapshotRevisionRef = useRef<number | null>(null);
   const pollNowRef = useRef<() => void>(() => {});
   const pasteBusyRef = useRef(false);
@@ -331,7 +355,12 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             ...m,
             isMe: m.senderId === session.id,
           }));
-        return fresh.length ? [...previous, ...fresh].slice(-501) : previous;
+        if (!fresh.length) return previous;
+        // Keep chronological order even when WebSocket pushes and REST polls
+        // arrive out of order.
+        return [...previous, ...fresh]
+          .sort((a, b) => a.timestamp - b.timestamp || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+          .slice(-501);
       });
     },
     [session.id],
@@ -361,6 +390,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     setSnippetPlaying(false);
     setReplyingTo(null);
     retryMessageRef.current = null;
+    musicRetryRef.current = null;
     setError('');
   }, []);
   useEffect(() => {
@@ -439,7 +469,8 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
     isAtLatestRef.current = true;
     setIsAtLatest(true);
     setUnreadMessageCount(0);
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    container.scrollTo({ top: container.scrollHeight, behavior: reduceMotion ? 'auto' : 'smooth' });
   };
   const scrollToRepliedMessage = (messageId: string) => {
     const target = messageBubbleRefs.current[messageId];
@@ -566,7 +597,12 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
         );
         setPeerPresence(data.peerPresence === 'inactive' ? 'inactive' : 'active');
         receiveMessages(data.messages, true);
+        // Polls carry no liveness heartbeat: expire a stale "is typing"
+        // the same way live WebSocket events do.
         setIsPeerTyping(data.isPeerTyping);
+        if (peerTypingTimer.current) clearTimeout(peerTypingTimer.current);
+        if (data.isPeerTyping)
+          peerTypingTimer.current = setTimeout(() => setIsPeerTyping(false), 3000);
         setError((current) => (current.startsWith('Connection interrupted') ? '' : current));
       } catch {
         if (!disposed && ++failures >= 2) setConnectionLost(true);
@@ -1090,14 +1126,30 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
           },
         ]);
       } else {
+        // Stable idempotency key per snippet payload: a retry after a
+        // timeout or reconnect reuses the key so the server dedups it
+        // instead of posting the snippet twice.
+        if (
+          musicRetryRef.current?.trackId !== musicSnippet.trackId ||
+          musicRetryRef.current?.caption !== musicSnippet.caption ||
+          musicRetryRef.current?.replyId !== replyTo?.id
+        ) {
+          musicRetryRef.current = {
+            trackId: musicSnippet.trackId,
+            caption: musicSnippet.caption,
+            replyId: replyTo?.id,
+            id: crypto.randomUUID(),
+          };
+        }
         const data = await apiRequest<{ message: ChatMessage }>('/api/chat/send', {
           roomId,
           text: '',
           musicSnippet,
-          clientMessageId: crypto.randomUUID(),
+          clientMessageId: musicRetryRef.current.id,
           replyTo,
         });
         if (endedRef.current) return;
+        musicRetryRef.current = null;
         receiveMessages([data.message]);
       }
       scrollAfterOwnMessageRef.current = true;
@@ -1518,41 +1570,48 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
         <div
           id="chat-messages-container"
           ref={messagesContainerRef}
+          tabIndex={-1}
           onScroll={handleMessagesScroll}
           className="flex-1 min-h-0 w-full px-3 py-3.5 sm:px-6 sm:py-7 overflow-y-auto overscroll-contain space-y-1 select-text"
         >
           <div className="max-w-3xl mx-auto w-full space-y-0.5">
-            <div className="flex items-center gap-3 py-2" aria-hidden="true">
-              <span className="h-px flex-1 bg-stone-200 dark:bg-stone-800" />
-              <span className="rounded-full border border-stone-200 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-500 dark:border-stone-700 dark:bg-stone-900/80 dark:text-stone-400">
-                Today
-              </span>
-              <span className="h-px flex-1 bg-stone-200 dark:bg-stone-800" />
-            </div>
             {messages.map((msg, index) => {
+              const previousMessage = messages[index - 1];
+              const showDaySeparator =
+                !previousMessage || dayKey(previousMessage.timestamp) !== dayKey(msg.timestamp);
+              const daySeparator = showDaySeparator ? (
+                <div className="flex items-center gap-3 py-2" key={`day-${msg.id}`}>
+                  <span className="h-px flex-1 bg-stone-200 dark:bg-stone-800" />
+                  <span className="rounded-full border border-stone-200 bg-white/80 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-stone-500 dark:border-stone-700 dark:bg-stone-900/80 dark:text-stone-400">
+                    {dayLabel(msg.timestamp)}
+                  </span>
+                  <span className="h-px flex-1 bg-stone-200 dark:bg-stone-800" />
+                </div>
+              ) : null;
               if (msg.type === 'system') {
                 const isUnsentMessage = msg.text === 'Message unsent.';
                 return (
-                  <div
-                    key={msg.id}
-                    className={`my-3 flex w-full ${isUnsentMessage ? (msg.isMe ? 'justify-end' : 'justify-start') : 'justify-center'}`}
-                  >
+                  <React.Fragment key={msg.id}>
+                    {daySeparator}
                     <div
-                      className={`inline-block max-w-[92%] rounded-full border px-3 py-1.5 text-xs ${
-                        isUnsentMessage ? 'text-left' : 'text-center'
-                      } ${
-                        isDarkMode
-                          ? 'bg-stone-900 border-stone-800 text-stone-400'
-                          : 'bg-stone-100 border-stone-300 text-stone-600'
-                      }`}
+                      className={`my-3 flex w-full ${isUnsentMessage ? (msg.isMe ? 'justify-end' : 'justify-start') : 'justify-center'}`}
                     >
-                      <span>{msg.text}</span>
+                      <div
+                        className={`inline-block max-w-[92%] rounded-full border px-3 py-1.5 text-xs ${
+                          isUnsentMessage ? 'text-left' : 'text-center'
+                        } ${
+                          isDarkMode
+                            ? 'bg-stone-900 border-stone-800 text-stone-400'
+                            : 'bg-stone-100 border-stone-300 text-stone-600'
+                        }`}
+                      >
+                        <span>{msg.text}</span>
+                      </div>
                     </div>
-                  </div>
+                  </React.Fragment>
                 );
               }
 
-              const previousMessage = messages[index - 1];
               const isGroupedWithPrevious = Boolean(
                 previousMessage &&
                 previousMessage.type !== 'system' &&
@@ -1574,227 +1633,234 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                 !msg.text && !msg.musicSnippet && (!!msg.voice || !!msg.images?.length);
 
               return (
-                <div
-                  key={msg.id}
-                  data-grouped={isGroupedWithPrevious}
-                  className={`chat-message-row group flex touch-pan-y flex-col ${msg.isMe ? 'items-end' : 'items-start'} ${isGroupedWithPrevious ? 'mt-0' : ''}`}
-                  onTouchStart={(event) => {
-                    const touch = event.touches[0];
-                    if (touch) {
-                      touchRef.current = {
-                        id: msg.id,
-                        startX: touch.clientX,
-                        startY: touch.clientY,
-                        offset: 0,
-                        axis: null,
-                      };
-                    }
-                  }}
-                  onTouchMove={(event) => {
-                    const touch = event.touches[0];
-                    const current = touchRef.current;
-                    if (!touch || !current || current.id !== msg.id) return;
-                    const deltaX = touch.clientX - current.startX;
-                    const deltaY = touch.clientY - current.startY;
-                    if (!current.axis && Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= 8) {
-                      current.axis = Math.abs(deltaY) >= Math.abs(deltaX) ? 'y' : 'x';
-                    }
-                    if (current.axis !== 'x') return;
-                    const allowedOffset = msg.isMe ? Math.min(0, deltaX) : Math.max(0, deltaX);
-                    current.offset = Math.max(-96, Math.min(96, allowedOffset));
-                    setSwipe({ id: msg.id, offset: current.offset });
-                  }}
-                  onTouchEnd={(event) => {
-                    const current = touchRef.current;
-                    if (!current || current.id !== msg.id) return;
-                    const offset = current.offset;
-                    if ((msg.isMe && offset <= -56) || (!msg.isMe && offset >= 56)) {
-                      setReplyingTo(msg);
-                    }
-                    setSwipe(null);
-                    touchRef.current = null;
-                  }}
-                  onTouchCancel={() => {
-                    setSwipe(null);
-                    touchRef.current = null;
-                  }}
-                >
-                  {!isGroupedWithPrevious && (
-                    <div className="mb-2 flex max-w-[92%] items-baseline gap-1.5 px-1 text-[11px] font-mono text-stone-500 dark:text-stone-400 sm:max-w-[75%]">
-                      <span className="min-w-0 truncate font-semibold text-stone-600 dark:text-stone-300">
-                        {msg.isMe ? 'You' : msg.senderHandle}
-                      </span>
-                      <span>•</span>
-                      <span className="shrink-0">{messageTimeFormatter.format(msg.timestamp)}</span>
-                      {msg.edited && (
-                        <span className="shrink-0 uppercase tracking-[0.12em] text-[9px] text-stone-500/80 dark:text-stone-400/80">
-                          Edited
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Keep the bubble, quote, and actions within the same message column. */}
+                <React.Fragment key={msg.id}>
+                  {daySeparator}
                   <div
-                    className={`relative min-w-0 w-fit ${msg.replyTo ? 'max-w-[min(92%,24rem)] sm:max-w-[min(75%,24rem)]' : 'max-w-[92%] sm:max-w-[75%]'}`}
-                  >
-                    {swipe?.id === msg.id && swipe.offset !== 0 && (
-                      <span
-                        className={`absolute top-1/2 -translate-y-1/2 text-[10px] font-mono font-semibold ${
-                          msg.isMe ? 'right-full mr-2' : 'left-full ml-2'
-                        }`}
-                        style={{ color: chatTheme.accent }}
-                      >
-                        Reply
-                      </span>
-                    )}
-                    <MessageReactions
-                      reactions={msg.reactions}
-                      sessionId={session.id}
-                      onReact={(emoji) => handleReact(msg.id, emoji)}
-                      align={msg.isMe ? 'end' : 'start'}
-                      actions={
-                        <>
-                          <button
-                            type="button"
-                            aria-label="Reply"
-                            title="Reply"
-                            onClick={() => setReplyingTo(msg)}
-                            className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
-                          >
-                            <Reply className="chat-theme-accent-text h-4 w-4" />
-                          </button>
-                          {!msg.isMe && !reportedMessageIds.includes(msg.id) && (
-                            <button
-                              type="button"
-                              aria-label="Report this message"
-                              title="Report this message"
-                              onClick={() => openSafetyDialog(msg.id)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
-                            >
-                              <Flag className="h-4 w-4 text-amber-500 dark:text-amber-400" />
-                            </button>
-                          )}
-                          {(msg.isMe || !!msg.musicSnippet) && (
-                            <button
-                              type="button"
-                              aria-label="More message actions"
-                              title="More message actions"
-                              onClick={() => {
-                                if (deleteMenuMessageId === msg.id) closeMessageActions();
-                                else openMessageActions(msg.id);
-                              }}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
-                            >
-                              <MoreVertical className="chat-theme-accent-text h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </>
+                    data-grouped={isGroupedWithPrevious}
+                    className={`chat-message-row group flex touch-pan-y flex-col ${msg.isMe ? 'items-end' : 'items-start'} ${isGroupedWithPrevious ? 'mt-0' : ''}`}
+                    onTouchStart={(event) => {
+                      const touch = event.touches[0];
+                      if (touch) {
+                        touchRef.current = {
+                          id: msg.id,
+                          startX: touch.clientX,
+                          startY: touch.clientY,
+                          offset: 0,
+                          axis: null,
+                        };
                       }
-                      onLongPress={() => openMessageActions(msg.id)}
-                    >
-                      <div
-                        ref={(element) => {
-                          messageBubbleRefs.current[msg.id] = element;
-                        }}
-                        data-message-bubble
-                        data-media-only={mediaOnly}
-                        className={`flex min-w-0 w-fit max-w-full flex-col items-stretch rounded-2xl text-left text-[13px] leading-[19px] transition-transform duration-150 ${highlightedMessageId === msg.id ? 'reply-target-highlight' : ''} ${
-                          mediaOnly
-                            ? 'gap-0 border-0 bg-transparent p-0 shadow-none'
-                            : `border px-3.5 shadow-[0_1px_2px_rgba(41,37,36,0.04)] ${
-                                isGroupedWithPrevious ? 'gap-1 py-2' : 'gap-1.5 py-2.5'
-                              } ${
-                                msg.isMe
-                                  ? 'text-white'
-                                  : isDarkMode
-                                    ? 'bg-stone-900/95 border-stone-700/80 text-stone-100'
-                                    : 'bg-white/95 border-stone-200 text-stone-900'
-                              }`
-                        }`}
-                        style={{
-                          transform:
-                            swipe?.id === msg.id && swipe.offset !== 0
-                              ? `translateX(${swipe.offset}px)`
-                              : undefined,
-                          ...(msg.isMe && !mediaOnly
-                            ? { backgroundColor: chatTheme.accent, borderColor: chatTheme.accent }
-                            : {}),
-                        }}
-                      >
-                        {msg.replyTo && (
-                          <button
-                            type="button"
-                            data-reply-preview
-                            aria-label={`Jump to message from ${msg.replyTo.senderHandle}`}
-                            onClick={() => scrollToRepliedMessage(msg.replyTo!.id)}
-                            className={`min-w-0 w-full cursor-pointer overflow-hidden rounded-md border-l-2 px-2 py-1 text-left text-[11px] leading-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 ${
-                              msg.isMe
-                                ? 'border-white/60 bg-black/15 text-white/90'
-                                : 'border-stone-400 bg-black/5 text-stone-600 dark:border-stone-500 dark:bg-white/5 dark:text-stone-300'
-                            }`}
-                          >
-                            <div className="truncate font-semibold">{msg.replyTo.senderHandle}</div>
-                            <p className="truncate">{msg.replyTo.text}</p>
-                          </button>
-                        )}
-                        {!!msg.images?.length && (
-                          <div
-                            className={`grid min-w-0 gap-2 ${msg.images.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}
-                          >
-                            {msg.images.map((image) => (
-                              <button
-                                key={image.id}
-                                type="button"
-                                onClick={() => setViewingImage(image)}
-                                aria-label={'View photo ' + image.name}
-                                className="block min-w-0 overflow-hidden rounded-lg bg-black/10"
-                              >
-                                <img
-                                  src={image.url}
-                                  alt={image.name}
-                                  width={image.width}
-                                  height={image.height}
-                                  className="max-h-64 w-full max-w-80 object-contain"
-                                  loading="lazy"
-                                  draggable={false}
-                                />
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        {msg.voice && <VoiceMessagePlayer voice={msg.voice} isMe={msg.isMe} />}
-                        {msg.text && (
-                          <p className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
-                            {msg.text}
-                          </p>
-                        )}
-                        {msg.musicSnippet && (
-                          <MusicSnippetCard
-                            snippet={msg.musicSnippet}
-                            active={activeSnippetId === msg.id}
-                            playing={activeSnippetId === msg.id && snippetPlaying}
-                            onToggle={() => {
-                              if (activeSnippetId === msg.id) setSnippetPlaying((value) => !value);
-                              else {
-                                setActiveSnippetId(msg.id);
-                                setSnippetPlaying(true);
-                              }
-                            }}
-                            onPlayingChange={setSnippetPlaying}
-                          />
-                        )}
-                        {msg.edited && isGroupedWithPrevious && (
-                          <span
-                            className={`text-[9px] uppercase tracking-[0.12em] ${msg.isMe ? 'text-white/70' : 'text-stone-500 dark:text-stone-400'}`}
-                          >
+                    }}
+                    onTouchMove={(event) => {
+                      const touch = event.touches[0];
+                      const current = touchRef.current;
+                      if (!touch || !current || current.id !== msg.id) return;
+                      const deltaX = touch.clientX - current.startX;
+                      const deltaY = touch.clientY - current.startY;
+                      if (!current.axis && Math.max(Math.abs(deltaX), Math.abs(deltaY)) >= 8) {
+                        current.axis = Math.abs(deltaY) >= Math.abs(deltaX) ? 'y' : 'x';
+                      }
+                      if (current.axis !== 'x') return;
+                      const allowedOffset = msg.isMe ? Math.min(0, deltaX) : Math.max(0, deltaX);
+                      current.offset = Math.max(-96, Math.min(96, allowedOffset));
+                      setSwipe({ id: msg.id, offset: current.offset });
+                    }}
+                    onTouchEnd={(event) => {
+                      const current = touchRef.current;
+                      if (!current || current.id !== msg.id) return;
+                      const offset = current.offset;
+                      if ((msg.isMe && offset <= -56) || (!msg.isMe && offset >= 56)) {
+                        setReplyingTo(msg);
+                      }
+                      setSwipe(null);
+                      touchRef.current = null;
+                    }}
+                    onTouchCancel={() => {
+                      setSwipe(null);
+                      touchRef.current = null;
+                    }}
+                  >
+                    {!isGroupedWithPrevious && (
+                      <div className="mb-2 flex max-w-[92%] items-baseline gap-1.5 px-1 text-[11px] font-mono text-stone-500 dark:text-stone-400 sm:max-w-[75%]">
+                        <span className="min-w-0 truncate font-semibold text-stone-600 dark:text-stone-300">
+                          {msg.isMe ? 'You' : msg.senderHandle}
+                        </span>
+                        <span>•</span>
+                        <span className="shrink-0">
+                          {messageTimeFormatter.format(msg.timestamp)}
+                        </span>
+                        {msg.edited && (
+                          <span className="shrink-0 uppercase tracking-[0.12em] text-[9px] text-stone-500/80 dark:text-stone-400/80">
                             Edited
                           </span>
                         )}
                       </div>
-                    </MessageReactions>
+                    )}
+
+                    {/* Keep the bubble, quote, and actions within the same message column. */}
+                    <div
+                      className={`relative min-w-0 w-fit ${msg.replyTo ? 'max-w-[min(92%,24rem)] sm:max-w-[min(75%,24rem)]' : 'max-w-[92%] sm:max-w-[75%]'}`}
+                    >
+                      {swipe?.id === msg.id && swipe.offset !== 0 && (
+                        <span
+                          className={`absolute top-1/2 -translate-y-1/2 text-[10px] font-mono font-semibold ${
+                            msg.isMe ? 'right-full mr-2' : 'left-full ml-2'
+                          }`}
+                          style={{ color: chatTheme.accent }}
+                        >
+                          Reply
+                        </span>
+                      )}
+                      <MessageReactions
+                        reactions={msg.reactions}
+                        sessionId={session.id}
+                        onReact={(emoji) => handleReact(msg.id, emoji)}
+                        align={msg.isMe ? 'end' : 'start'}
+                        actions={
+                          <>
+                            <button
+                              type="button"
+                              aria-label="Reply"
+                              title="Reply"
+                              onClick={() => setReplyingTo(msg)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+                            >
+                              <Reply className="chat-theme-accent-text h-4 w-4" />
+                            </button>
+                            {!msg.isMe && !reportedMessageIds.includes(msg.id) && (
+                              <button
+                                type="button"
+                                aria-label="Report this message"
+                                title="Report this message"
+                                onClick={() => openSafetyDialog(msg.id)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+                              >
+                                <Flag className="h-4 w-4 text-amber-500 dark:text-amber-400" />
+                              </button>
+                            )}
+                            {(msg.isMe || !!msg.musicSnippet) && (
+                              <button
+                                type="button"
+                                aria-label="More message actions"
+                                title="More message actions"
+                                onClick={() => {
+                                  if (deleteMenuMessageId === msg.id) closeMessageActions();
+                                  else openMessageActions(msg.id);
+                                }}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-stone-500 hover:bg-stone-100 dark:text-stone-400 dark:hover:bg-stone-800"
+                              >
+                                <MoreVertical className="chat-theme-accent-text h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </>
+                        }
+                        onLongPress={() => openMessageActions(msg.id)}
+                      >
+                        <div
+                          ref={(element) => {
+                            messageBubbleRefs.current[msg.id] = element;
+                          }}
+                          data-message-bubble
+                          data-media-only={mediaOnly}
+                          className={`flex min-w-0 w-fit max-w-full flex-col items-stretch rounded-2xl text-left text-[13px] leading-[19px] transition-transform duration-150 ${highlightedMessageId === msg.id ? 'reply-target-highlight' : ''} ${
+                            mediaOnly
+                              ? 'gap-0 border-0 bg-transparent p-0 shadow-none'
+                              : `border px-3.5 shadow-[0_1px_2px_rgba(41,37,36,0.04)] ${
+                                  isGroupedWithPrevious ? 'gap-1 py-2' : 'gap-1.5 py-2.5'
+                                } ${
+                                  msg.isMe
+                                    ? 'text-white'
+                                    : isDarkMode
+                                      ? 'bg-stone-900/95 border-stone-700/80 text-stone-100'
+                                      : 'bg-white/95 border-stone-200 text-stone-900'
+                                }`
+                          }`}
+                          style={{
+                            transform:
+                              swipe?.id === msg.id && swipe.offset !== 0
+                                ? `translateX(${swipe.offset}px)`
+                                : undefined,
+                            ...(msg.isMe && !mediaOnly
+                              ? { backgroundColor: chatTheme.accent, borderColor: chatTheme.accent }
+                              : {}),
+                          }}
+                        >
+                          {msg.replyTo && (
+                            <button
+                              type="button"
+                              data-reply-preview
+                              aria-label={`Jump to message from ${msg.replyTo.senderHandle}`}
+                              onClick={() => scrollToRepliedMessage(msg.replyTo!.id)}
+                              className={`min-w-0 w-full cursor-pointer overflow-hidden rounded-md border-l-2 px-2 py-1 text-left text-[11px] leading-4 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 ${
+                                msg.isMe
+                                  ? 'border-white/60 bg-black/15 text-white/90'
+                                  : 'border-stone-400 bg-black/5 text-stone-600 dark:border-stone-500 dark:bg-white/5 dark:text-stone-300'
+                              }`}
+                            >
+                              <div className="truncate font-semibold">
+                                {msg.replyTo.senderHandle}
+                              </div>
+                              <p className="truncate">{msg.replyTo.text}</p>
+                            </button>
+                          )}
+                          {!!msg.images?.length && (
+                            <div
+                              className={`grid min-w-0 gap-2 ${msg.images.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}
+                            >
+                              {msg.images.map((image) => (
+                                <button
+                                  key={image.id}
+                                  type="button"
+                                  onClick={() => setViewingImage(image)}
+                                  aria-label={'View photo ' + image.name}
+                                  className="block min-w-0 overflow-hidden rounded-lg bg-black/10"
+                                >
+                                  <img
+                                    src={image.url}
+                                    alt={image.name}
+                                    width={image.width}
+                                    height={image.height}
+                                    className="max-h-64 w-full max-w-80 object-contain"
+                                    loading="lazy"
+                                    draggable={false}
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {msg.voice && <VoiceMessagePlayer voice={msg.voice} isMe={msg.isMe} />}
+                          {msg.text && (
+                            <p className="min-w-0 whitespace-pre-wrap [overflow-wrap:anywhere]">
+                              {msg.text}
+                            </p>
+                          )}
+                          {msg.musicSnippet && (
+                            <MusicSnippetCard
+                              snippet={msg.musicSnippet}
+                              active={activeSnippetId === msg.id}
+                              playing={activeSnippetId === msg.id && snippetPlaying}
+                              onToggle={() => {
+                                if (activeSnippetId === msg.id)
+                                  setSnippetPlaying((value) => !value);
+                                else {
+                                  setActiveSnippetId(msg.id);
+                                  setSnippetPlaying(true);
+                                }
+                              }}
+                              onPlayingChange={setSnippetPlaying}
+                            />
+                          )}
+                          {msg.edited && isGroupedWithPrevious && (
+                            <span
+                              className={`text-[9px] uppercase tracking-[0.12em] ${msg.isMe ? 'text-white/70' : 'text-stone-500 dark:text-stone-400'}`}
+                            >
+                              Edited
+                            </span>
+                          )}
+                        </div>
+                      </MessageReactions>
+                    </div>
                   </div>
-                </div>
+                </React.Fragment>
               );
             })}
 
@@ -2390,6 +2456,7 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
             >
               <div
                 aria-hidden={!composerControlsVisible}
+                inert={!composerControlsVisible}
                 className={`chat-composer-tools flex shrink-0 items-center gap-1.5 overflow-hidden transition-all duration-200 ease-out ${composerControlsVisible ? 'visible max-w-36 translate-x-0 opacity-100' : 'invisible max-w-0 -translate-x-2 opacity-0 pointer-events-none'}`}
               >
                 <ChatAttachments
@@ -2494,6 +2561,8 @@ export const ChatRoom: React.FC<ChatRoomProps> = ({
                 </button>
               )}
               <div
+                aria-hidden={!(editingMessageId || composerControlsVisible)}
+                inert={!(editingMessageId || composerControlsVisible)}
                 className={`shrink-0 overflow-hidden transition-all duration-200 ease-out ${editingMessageId || composerControlsVisible ? 'visible max-w-10 translate-x-0 opacity-100' : 'invisible max-w-0 translate-x-2 opacity-0 pointer-events-none'}`}
               >
                 <button

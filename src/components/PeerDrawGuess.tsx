@@ -127,21 +127,50 @@ export const PeerDrawGuess = forwardRef<
         try {
           apply(await apiRequest<DrawGuessState>('/api/chat/drawing', { roomId, ...action }));
         } catch (err) {
+          const message = (err as Error).message;
           if (mounted.current) {
-            setError(
-              action.action === 'stroke'
-                ? `Sketch could not sync: ${(err as Error).message} Reopen or continue after reconnecting.`
-                : (err as Error).message,
-            );
+            let fresh: DrawGuessState | null = null;
             try {
-              apply(
-                await apiRequest<DrawGuessState>(
-                  '/api/chat/drawing?roomId=' + encodeURIComponent(roomId),
-                ),
+              fresh = await apiRequest<DrawGuessState>(
+                '/api/chat/drawing?roomId=' + encodeURIComponent(roomId),
               );
+              apply(fresh);
             } catch {
               /* Keep visible error. */
             }
+            if (
+              action.action === 'stroke' &&
+              /canvas changed/i.test(message) &&
+              typeof fresh?.game?.canvasVersion === 'number'
+            ) {
+              // Undo/clear moved the canvas between render and upload. Rebase
+              // this batch onto the fresh version and retry once inline (a
+              // nested queued send would deadlock on this chain) instead of
+              // dropping the user's stroke.
+              try {
+                apply(
+                  await apiRequest<DrawGuessState>('/api/chat/drawing', {
+                    roomId,
+                    ...action,
+                    canvasVersion: fresh.game.canvasVersion,
+                  }),
+                );
+              } catch (retryErr) {
+                if (mounted.current) {
+                  setError(
+                    `Sketch could not sync: ${(retryErr as Error).message} Reopen or continue after reconnecting.`,
+                  );
+                }
+                throw retryErr;
+              }
+              if (mounted.current) setError('');
+              return;
+            }
+            setError(
+              action.action === 'stroke'
+                ? `Sketch could not sync: ${message} Reopen or continue after reconnecting.`
+                : message,
+            );
           }
           throw err;
         } finally {
@@ -178,7 +207,7 @@ export const PeerDrawGuess = forwardRef<
     if (!open && !setup) return;
     const previous = document.activeElement as HTMLElement | null;
     const el = dialog.current!;
-    el.showModal();
+    if (!el.open) el.showModal();
     const cancel = (e: Event) => {
       e.preventDefault();
       if (syncingRef.current) return;
@@ -188,7 +217,7 @@ export const PeerDrawGuess = forwardRef<
     el.addEventListener('cancel', cancel);
     return () => {
       el.removeEventListener('cancel', cancel);
-      el.close();
+      if (el.open) el.close();
       previous?.focus({ preventScroll: true });
     };
   }, [open, setup]);

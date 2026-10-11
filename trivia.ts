@@ -439,6 +439,17 @@ const TRIVIA_QUESTIONS: TriviaQuestion[] = [
   },
 ];
 
+const TRIVIA_CATEGORIES: ReadonlySet<string> = new Set([
+  'general',
+  'science',
+  'technology',
+  'gaming',
+  'movies',
+  'music',
+  'history',
+  'random',
+]);
+
 function getQuestions(category: TriviaCategory, count: number = 10): TriviaQuestion[] {
   let pool: TriviaQuestion[];
   if (category === 'random') {
@@ -446,10 +457,21 @@ function getQuestions(category: TriviaCategory, count: number = 10): TriviaQuest
   } else {
     pool = TRIVIA_QUESTIONS.filter((q) => q.category === category);
     if (pool.length < count) {
-      pool = [...pool, ...TRIVIA_QUESTIONS.filter((q) => q.category === 'general')];
+      const seen = new Set(pool.map((q) => q.id));
+      for (const q of TRIVIA_QUESTIONS.filter((q) => q.category === 'general')) {
+        if (seen.has(q.id)) continue;
+        seen.add(q.id);
+        pool.push(q);
+        if (pool.length >= count) break;
+      }
     }
   }
-  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  // Fisher-Yates with crypto randomness: uniform, unbiased selection.
+  const shuffled = [...pool];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = crypto.randomInt(i + 1);
+    [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
+  }
   return shuffled.slice(0, count);
 }
 
@@ -513,7 +535,11 @@ export class PeerTrivia {
     game.questions = game.questions.map((question, index) => {
       const visible =
         index < game.currentQuestionIndex || (index === game.currentQuestionIndex && revealed);
-      return visible ? question : { ...question, correctIndex: -1 };
+      if (visible) return question;
+      // Future questions stay hidden: without this a peer could pre-read or
+      // search upcoming prompts before they are asked.
+      if (index === game.currentQuestionIndex) return { ...question, correctIndex: -1 };
+      return { ...question, question: '', options: [], correctIndex: -1 };
     });
     return state;
   }
@@ -536,7 +562,7 @@ export class PeerTrivia {
         fromHandle: peers.find((peer) => peer.id === actor)!.handle,
         expiresAt: Date.now() + 90000,
       };
-      this.pendingCategory = action.category;
+      this.pendingCategory = TRIVIA_CATEGORIES.has(action.category) ? action.category : 'general';
       state.leftBy = null;
     } else if (action.action === 'respond') {
       const invitation = state.invitation;
@@ -545,7 +571,9 @@ export class PeerTrivia {
       if (action.accept && invitation.fromId === actor)
         throw new Error('Only your peer can accept this invitation.');
       if (action.accept) {
-        const ordered = [...peers].sort((a) => (a.id === invitation.fromId ? -1 : 1));
+        const ordered = [...peers].sort((a, b) =>
+          a.id === invitation.fromId ? -1 : b.id === invitation.fromId ? 1 : a.id < b.id ? -1 : 1,
+        );
         const questions = getQuestions(this.pendingCategory);
         state.game = {
           id: crypto.randomUUID(),

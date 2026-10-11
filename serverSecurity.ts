@@ -78,6 +78,8 @@ export function validateProductionConfig(
     throw new Error('ADMIN_TOKEN must contain at least 32 random characters when configured.');
   if (env.ADMIN_TOKEN && env.ADMIN_TOKEN === env.MODERATION_SECRET)
     throw new Error('Admin and moderation secrets must be different.');
+  if (env.ADMIN_TOKEN && env.ADMIN_TOKEN === env.ADMIN_PASSWORD)
+    throw new Error('ADMIN_TOKEN and ADMIN_PASSWORD must be different.');
 }
 
 export const metrics = {

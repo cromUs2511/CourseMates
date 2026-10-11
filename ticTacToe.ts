@@ -50,7 +50,9 @@ export class PeerTicTacToe {
       if (action.accept && invitation.fromId === actor)
         throw new Error('Only your peer can accept this invitation.');
       if (action.accept) {
-        const ordered = [...peers].sort((a) => (a.id === invitation.fromId ? -1 : 1));
+        const ordered = [...peers].sort((a, b) =>
+          a.id === invitation.fromId ? -1 : b.id === invitation.fromId ? 1 : a.id < b.id ? -1 : 1,
+        );
         state.game = {
           id: crypto.randomUUID(),
           round: 1,
@@ -90,7 +92,8 @@ export class PeerTicTacToe {
       } else if (action.action === 'move') {
         if (action.revision !== state.revision) throw new Error('The board changed. Try again.');
         if (game.result) throw new Error('This round is over.');
-        const player = game.players.find((peer) => peer.id === actor)!;
+        const player = game.players.find((peer) => peer.id === actor);
+        if (!player) throw new Error('This game is for the two current chat participants.');
         if (player.mark !== game.turn) throw new Error('It is not your turn.');
         if (
           !Number.isInteger(action.square) ||

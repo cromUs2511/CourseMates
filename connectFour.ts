@@ -118,14 +118,18 @@ export class PeerConnectFour {
         if (game.rematch.length === 2) {
           game.round++;
           game.board = emptyBoard();
-          game.turn = 'red';
+          // Alternate the opening move so the inviter keeps no permanent
+          // first-move advantage across rematches.
+          game.turn = game.round % 2 === 0 ? 'yellow' : 'red';
           game.result = null;
           game.lastMove = null;
           game.rematch = [];
         }
       } else if (action.action === 'move') {
+        if (action.revision !== state.revision) throw new Error('The board changed. Try again.');
         if (game.result) throw new Error('This round is over.');
-        const player = game.players.find((p) => p.id === actor)!;
+        const player = game.players.find((p) => p.id === actor);
+        if (!player) throw new Error('This game is for the two current chat participants.');
         if (player.color !== game.turn) throw new Error('It is not your turn.');
         if (!Number.isInteger(action.column) || action.column < 0 || action.column >= COLS)
           throw new Error('Invalid column.');

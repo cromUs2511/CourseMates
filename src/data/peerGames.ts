@@ -95,10 +95,23 @@ export type ChessState = {
     board: ChessBoard;
     /** Server-authoritative position (castling rights, en passant, clocks). */
     fen: string;
+    /**
+     * Position keys (FEN without move clocks) from game start through the
+     * latest move. chess.js history does not survive the per-move FEN reload,
+     * so threefold repetition is counted from this log instead.
+     */
+    positionHistory: string[];
     turn: ChessPieceColor;
     result: {
       winnerId: string | null;
-      reason: 'checkmate' | 'stalemate' | 'resignation' | 'draw-agreed';
+      reason:
+        | 'checkmate'
+        | 'stalemate'
+        | 'threefold-repetition'
+        | 'insufficient-material'
+        | 'fifty-move-draw'
+        | 'resignation'
+        | 'draw-agreed';
     } | null;
     inCheck: ChessPieceColor | null;
     lastMove: { from: [number, number]; to: [number, number]; piece: ChessPiece } | null;

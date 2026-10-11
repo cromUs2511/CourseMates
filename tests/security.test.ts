@@ -53,6 +53,14 @@ test('production fails closed without HTTPS, single process, persistent safety s
   );
   assert.doesNotThrow(() => validateProductionConfig({ ...env, ADMIN_TOKEN: 'c'.repeat(32) }));
   assert.throws(() => validateProductionConfig({ ...env, ADMIN_TOKEN: 'short' }), /ADMIN_TOKEN/i);
+  assert.throws(
+    () => validateProductionConfig({ ...env, ADMIN_TOKEN: env.MODERATION_SECRET }),
+    /different/i,
+  );
+  assert.throws(
+    () => validateProductionConfig({ ...env, ADMIN_TOKEN: env.ADMIN_PASSWORD }),
+    /different/i,
+  );
 });
 
 test('same-origin JSON writes work while cross-origin, missing-origin and form requests fail', async () => {

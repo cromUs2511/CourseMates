@@ -61,7 +61,9 @@ export class PeerRockPaperScissors {
       if (action.accept && invitation.fromId === actor)
         throw new Error('Only your peer can accept this invitation.');
       if (action.accept) {
-        const ordered = [...peers].sort((a) => (a.id === invitation.fromId ? -1 : 1));
+        const ordered = [...peers].sort((a, b) =>
+          a.id === invitation.fromId ? -1 : b.id === invitation.fromId ? 1 : a.id < b.id ? -1 : 1,
+        );
         state.game = {
           id: crypto.randomUUID(),
           round: 1,
@@ -91,7 +93,7 @@ export class PeerRockPaperScissors {
         throw new Error('That round is no longer available.');
 
       if (action.action === 'rematch') {
-        if (!game.result) throw new Error('Finish this round first.');
+        if (game.turn !== 'round-end' || !game.result) throw new Error('Finish this match first.');
         if (game.rematch.includes(actor)) return;
         game.rematch.push(actor);
         if (game.rematch.length === 2) {
@@ -125,7 +127,8 @@ export class PeerRockPaperScissors {
           throw new Error('Choose rock, paper, or scissors.');
 
         game.choices[actor] = action.choice;
-        const player = game.players.find((p) => p.id === actor)!;
+        const player = game.players.find((p) => p.id === actor);
+        if (!player) throw new Error('This game is for the two current chat participants.');
         player.choice = action.choice;
         if (!game.locked.includes(actor)) game.locked.push(actor);
 

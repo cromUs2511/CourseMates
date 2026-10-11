@@ -111,6 +111,25 @@ if (geminiApiKey && geminiApiKey !== 'MY_GEMINI_API_KEY') {
 }
 const configuredAiModel = process.env.GEMINI_MODEL?.trim() || 'gemini-3.6-flash';
 const aiModel = configuredAiModel === 'gemini-2.5-flash' ? 'gemini-3.6-flash' : configuredAiModel;
+// Compact explicitly-supplied history before it reaches a provider: keep
+// recent turns, trim long messages, and cap total characters so retries
+// and fallbacks cannot multiply payload size or cost.
+function compactHistory(history: unknown, maxMessages = 12, maxChars = 12000): string {
+  if (!Array.isArray(history)) return '';
+  const lines: string[] = [];
+  let used = 0;
+  for (const item of history.slice(-maxMessages)) {
+    const record = item as { senderHandle?: unknown; text?: unknown } | null;
+    const handle = String(record?.senderHandle || 'Peer').slice(0, 40);
+    const text = String(record?.text || '').slice(0, 1000);
+    if (!text.trim()) continue;
+    const line = `${handle}: ${text}`;
+    if (used + line.length > maxChars) break;
+    lines.push(line);
+    used += line.length;
+  }
+  return lines.join('\n');
+}
 function sessionCookie(req: express.Request, res: express.Response, token: string) {
   const secure = (process.env.APP_URL || req.protocol + '://' + req.get('host')).startsWith(
     'https:',
@@ -389,7 +408,7 @@ Return ONLY a JSON object formatted strictly as:
     const parsed = JSON.parse(response.text || '{}');
     res.json(parsed);
   } catch (error) {
-    console.error('Error generating AI icebreakers:', error);
+    console.error('Error generating AI icebreakers.');
     const categoryList =
       DEFAULT_ICEBREAKERS[topic as keyof typeof DEFAULT_ICEBREAKERS] ??
       DEFAULT_ICEBREAKERS.academics ??
@@ -514,10 +533,7 @@ app.post('/api/ai/suggestions', async (req, res) => {
 
   try {
     const recentContext = Array.isArray(recentMessages)
-      ? recentMessages
-          .slice(-4)
-          .map((m: any) => `${m.senderHandle || 'Peer'}: ${m.text || ''}`)
-          .join('\n')
+      ? compactHistory(recentMessages.slice(-4), 4, 6000)
       : '';
 
     const prompt = `You are the intelligent topic-aware suggestion engine for "CourseMates", an anonymous real-time study chat for college students.
@@ -570,7 +586,7 @@ Return ONLY a JSON array of 4 strings:
       source: aiModel,
     });
   } catch (err) {
-    console.error('Gemini suggestions error:', err);
+    console.error('Gemini suggestions error.');
     const suggestions = getFallbackSuggestions(currentTopic);
     res.json({
       success: true,
@@ -604,13 +620,13 @@ app.post('/api/ai/assist', async (req, res) => {
     if (action === 'summarize') {
       prompt = `You are the CourseMates Study Assistant. Summarize this anonymous college student peer discussion into 3 concise bullet points with key takeaways or study insights. Keep it supportive and brief.
 Chat Log:
-${JSON.stringify(chatHistory || [])}`;
+${compactHistory(chatHistory)}`;
     } else if (action === 'explain') {
       prompt = `You are a friendly peer tutor. Explain this engineering, CS, math, science, or university concept concisely and intuitively in 2-3 short paragraphs with an analogy so two students in a study chat can understand it immediately:
 Concept/Question: "${query}"`;
     } else {
       prompt = `You are the CourseMates Conversation Wingman. Looking at the recent chat between two anonymous college students:
-Chat Context: ${JSON.stringify(chatHistory || [])}
+Chat Context: ${compactHistory(chatHistory)}
 Current Topic: ${topic || 'General'}
 Provide 2 friendly, non-intrusive suggestion options for what they could ask or say next to keep the conversation flowing smoothly.`;
     }

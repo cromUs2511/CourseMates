@@ -58,7 +58,9 @@ export class PeerDrawGuess {
     }
     const g = this.state.game;
     if (g?.phase === 'choosing' && now >= g.deadline) {
-      this.select(g, this.choices[0]!, g.deadline);
+      // Auto-pick from the live clock: the drawing window always lasts
+      // the full 60s even when the snapshot runs late.
+      this.select(g, this.choices[0]!, now);
       this.state.revision++;
     }
     if (g?.phase === 'drawing' && now >= g.deadline) {
@@ -307,7 +309,8 @@ export class PeerDrawGuess {
         if (now - this.lastGuessAt < 1000 || g.guesses.length >= 60)
           throw new Error('Wait a second before guessing again.');
         this.lastGuessAt = now;
-        const correct = matchesDrawAnswer(this.answer!.word, action.text);
+        if (!this.answer) throw new Error('This drawing turn is over.');
+        const correct = matchesDrawAnswer(this.answer.word, action.text);
         g.guesses.push({ id: crypto.randomUUID(), text: action.text.trim(), correct });
         if (correct) {
           g.scores[g.drawerId]! += 100;

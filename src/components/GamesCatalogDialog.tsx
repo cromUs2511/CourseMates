@@ -46,7 +46,7 @@ export function GamesCatalogDialog({
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const dialog = dialogRef.current!;
-    dialog.showModal();
+    if (!dialog.open) dialog.showModal();
     const cancel = (event: Event) => {
       event.preventDefault();
       closeRef.current();
@@ -54,7 +54,7 @@ export function GamesCatalogDialog({
     dialog.addEventListener('cancel', cancel);
     return () => {
       dialog.removeEventListener('cancel', cancel);
-      dialog.close();
+      if (dialog.open) dialog.close();
       previous?.focus({ preventScroll: true });
     };
   }, []);

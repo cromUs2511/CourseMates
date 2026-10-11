@@ -33,6 +33,7 @@ services:
       YOUTUBE_API_KEY: ${YOUTUBE_API_KEY:-}
       PYTHON_ORCHESTRATOR_MODE: shadow
       PYTHON_ORCHESTRATOR_URL: http://python-orchestrator:5051
+      PYTHON_ORCHESTRATOR_TOKEN: ${PYTHON_ORCHESTRATOR_TOKEN:-}
     ports:
       - '127.0.0.1:3000:3000'
     volumes:
@@ -55,6 +56,8 @@ services:
       - /tmp:size=16m,noexec,nosuid
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+    environment:
+      ORCHESTRATOR_INTERNAL_TOKEN: ${ORCHESTRATOR_INTERNAL_TOKEN:-}
     healthcheck:
       test:
         [

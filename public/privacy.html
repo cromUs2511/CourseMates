@@ -30,10 +30,11 @@
       <h2>Cookies and browser storage</h2>
       <p>
         A necessary HttpOnly session cookie restores access for up to eight hours. A separate
-        necessary browser safety cookie supports blocking and moderation. Cookies marked HttpOnly
-        are unavailable to page JavaScript. Appearance, theme, and other interface preferences may
-        be stored locally in your browser. These features are functional; the application does not
-        include advertising trackers. Third-party media has separate practices.
+        necessary browser safety cookie (up to 30 days) supports blocking and moderation by
+        identifying repeat misuse from the same browser. Cookies marked HttpOnly are unavailable to
+        page JavaScript. Appearance, theme, and other interface preferences may be stored locally in
+        your browser. These features are functional; the application does not include advertising
+        trackers. Third-party media has separate practices.
       </p>
       <h2>Retention and deletion</h2>
       <p>
@@ -42,10 +43,12 @@
         deleted, evicted from the room buffer, or when the room ends or expires; a server restart
         clears live sessions and chats. Sign-out ends your session. The service stores limited
         safety records separately: pseudonymous browser identifiers, report category and time, the
-        reported user's connection IP, block relationships, moderation action, and expiry. Reports
-        and their IP addresses are retained for up to 30 days. Temporary restrictions expire after
-        their selected period; permanent IP restrictions remain until lifted by an operator. Safety
-        records do not contain chat message text or media. Clearing your browser cookies removes the
+        reported user's connection IP, block relationships, moderation action, and expiry, plus a
+        limited review excerpt of up to the 50 most recent message texts (no media bytes) so a
+        moderator can assess the report. Reports and their IP addresses are retained for up to 30
+        days. Temporary restrictions expire after their selected period; permanent IP restrictions
+        remain until lifted by an operator. Report excerpts contain the reported conversation text;
+        chats outside a filed report are not retained. Clearing your browser cookies removes the
         local identifiers but does not immediately delete unexpired safety records.
       </p>
       <h2>Logs, hosting, and backups</h2>

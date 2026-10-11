@@ -4,6 +4,7 @@ export type PythonOrchestratorConfig = {
   mode: PythonOrchestratorMode;
   baseUrl: string;
   timeoutMs: number;
+  token?: string;
 };
 
 export type IcebreakerObservation = {
@@ -36,10 +37,12 @@ export function createPythonOrchestratorClient(
     if (config.mode !== 'shadow') return;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), config.timeoutMs);
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (config.token) headers['X-CM-Internal-Token'] = config.token;
     try {
       await fetchImpl(baseUrl + path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ contractVersion: 1, ...body }),
         signal: controller.signal,
       });
@@ -67,5 +70,6 @@ export function pythonOrchestratorConfig(
     mode: env.PYTHON_ORCHESTRATOR_MODE === 'shadow' ? 'shadow' : 'off',
     baseUrl: env.PYTHON_ORCHESTRATOR_URL || 'http://127.0.0.1:5051',
     timeoutMs: Math.max(50, Math.min(Number(env.PYTHON_ORCHESTRATOR_TIMEOUT_MS) || 500, 5000)),
+    token: env.PYTHON_ORCHESTRATOR_TOKEN || undefined,
   };
 }

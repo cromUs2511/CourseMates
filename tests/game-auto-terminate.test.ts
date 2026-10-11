@@ -69,7 +69,13 @@ test('a finished connect-four round auto-terminates so a new invite works', () =
   inviteAndAccept(game, { action: 'invite' } as never);
   const id = game.snapshot().game!.id;
   const drop = (actor: string, column: number) =>
-    game.act(actor, peers, { action: 'move', gameId: id, round: 1, revision: 0, column } as never);
+    game.act(actor, peers, {
+      action: 'move',
+      gameId: id,
+      round: 1,
+      revision: game.snapshot().revision,
+      column,
+    } as never);
   drop('a', 0);
   drop('b', 0);
   drop('a', 1);

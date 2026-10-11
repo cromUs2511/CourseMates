@@ -1,51 +1,464 @@
-CourseMates UI Upgrade Prompt
+# COURSE MATES ULTIMATE UPGRADE: COMPLETE PRIORITIZED ENGINEERING TASK LIST
 
-Objective
-Improve the current matchmaking and chat experience so it feels warmer, more trustworthy, and more mobile-friendly while preserving the anonymous peer-chat product intent.
+**Repository:** https://github.com/cromUs2511/CourseMates/
 
-Suggested UI changes
-- Matchmaking screen
-  - Replace the plain queue state with a clearer card-based flow: "Finding a study partner…", "Ready to chat", and "Need a quick match?"
-  - Add stronger visual feedback for matching state, including subtle pulse, progress indicator, and better status text.
-  - Make interest tags feel more conversational and easier to scan, with improved spacing and less visual clutter.
-  - Keep the single action path obvious: the user should always know what to do next without reading dense text.
+## ROLE
 
-- Chat room redesign
-  - Add a more polished room header with peer status, study topic, and quick actions (theme, mute, leave).
-  - Soften the message bubble hierarchy: incoming and outgoing messages should be visually distinct but still calm and lightweight.
-  - Improve readability on mobile by increasing tap targets, reducing line length, and adding better spacing between messages and media.
-  - Add subtle "seen" or activity affordances for message flow without making the interface feel noisy or intrusive.
+Act as a principal software architect, senior full-stack engineer, backend engineer, game systems engineer, cybersecurity specialist, QA engineer, DevOps engineer, performance engineer, and product designer.
 
-- Theme and personalization
-  - Keep the dark mode and chat-theme system, but make the theme switcher more discoverable and easier to use.
-  - Add clearer contrast between neutral surfaces, accent states, and interactive controls to improve accessibility.
-  - Preserve reduced-motion and accessibility-first behavior in all transitions and animated states.
+Your mission is to transform the existing CourseMates repository into its strongest possible version: a polished, reliable, secure, scalable, maintainable, and feature-rich anonymous student communication and social gaming platform.
 
-- Empty and transitional states
-  - Add more intentional onboarding copy for first-time users and better empty states for waiting, reconnecting, and session expiry.
-  - Improve reconnect flows so users understand whether the room is rejoining, waiting, or closed.
-  - Use calm success/error messaging that fits the product’s anonymous and low-pressure tone.
+Your objective is not merely to add more features. Your objective is to make every existing feature work correctly, eliminate architectural weaknesses, improve user experience, strengthen security, and prepare the platform for real-world adoption.
 
-- Accessibility and responsiveness
-  - Ensure all labels, toggles, and form controls meet touch-friendly sizing targets for mobile screens.
-  - Improve keyboard accessibility, focus visibility, and tab order across matchmaking and chat interactions.
-  - Maintain the existing support for reduced motion, light/dark mode, and responsive viewport adjustments.
+## NON-NEGOTIABLE RULES
 
-Prompt for the coding agent
+1. Inspect the actual current repository before making assumptions.
+2. Do not assume that README documentation accurately reflects the current implementation.
+3. Preserve all working features and the established CourseMates visual identity.
+4. Do not rewrite the entire application unless a documented technical reason justifies it.
+5. Do not remove existing functionality to make tests pass.
+6. Do not add unnecessary frameworks, services, dependencies, or programming languages.
+7. Do not claim a feature works unless its implementation and behavior have been verified.
+8. Do not claim performance, scalability, or security improvements without supporting evidence.
+9. Preserve the intended anonymous and privacy-conscious nature of the application.
+10. Make changes incrementally, run tests, fix regressions, and document results.
+11. Prioritize critical defects before introducing new features.
+12. Never expose secrets, credentials, private messages, or sensitive personal information.
+13. Do not deploy breaking changes to production without appropriate verification and authorization.
+14. Do not stop after producing an audit report. After the audit, proceed with the highest-priority safe implementation tasks.
+15. If blocked by missing credentials, unavailable infrastructure, or an external dependency, document the blocker and continue with independent tasks.
 
-Create a polished UI refresh for the CourseMates matchmaking and chat experience, focused on clarity, warmth, and mobile usability. Keep the existing product behavior and anonymous chat flow intact while improving the visual hierarchy and interaction design.
+# PHASE 1: COMPLETE REPOSITORY AUDIT — P0
 
-Requirements:
-- Update the matchmaking queue and waiting states to feel more intentional and less bare.
-- Refine the chat room layout so the header, composer, message bubbles, and actions feel clearer and more premium.
-- Maintain the current functionality for anonymous matching, session persistence, themes, sound, and reconnect flows.
-- Prioritize mobile responsiveness, large tap targets, and readable spacing.
-- Keep accessibility in mind: strong contrast, visible focus states, reduced-motion support, and keyboard-friendly controls.
-- Avoid altering the server contracts or any core runtime behavior.
-- Update the relevant React components and style files only where needed.
+1. Inspect the complete repository structure.
+2. Identify the frontend, backend, API routes, WebSocket handlers, databases, caches, and external services.
+3. Map the application startup sequence and major request flows.
+4. Inspect all environment variables and configuration files without exposing secret values.
+5. Review package scripts, build commands, dependencies, and runtime versions.
+6. Inspect matchmaking, session management, room lifecycle, messaging, and reconnection.
+7. Inspect every advertised multiplayer game and its server-side implementation.
+8. Inspect media uploads, music synchronization, AI integrations, and moderation.
+9. Inspect administrator functionality and access controls.
+10. Review automated tests, CI workflows, deployment configuration, and known defects.
+11. Identify incomplete features, duplicated logic, dead code, vulnerable dependencies, and architectural bottlenecks.
+12. Produce a prioritized defect register containing severity, affected files, evidence, reproduction steps, root cause, proposed fix, and acceptance criteria.
+13. Distinguish confirmed defects from suspected problems.
+14. Identify existing improvements that are already complete so they are not unnecessarily reimplemented.
 
-Success criteria:
-- The UI feels more polished and easier to understand without changing the app’s purpose or flow.
-- Waiting, reconnecting, and chat states are more legible and reassuring.
-- The interface remains responsive across common mobile and desktop widths.
-- Existing behavior continues to pass the relevant tests and lint/type checks.
+# PHASE 2: FIX CORE MESSAGING — P0
+
+1. Ensure messages have stable unique identifiers.
+2. Prevent duplicate messages caused by retries or reconnects.
+3. Preserve message ordering within each conversation.
+4. Define reliable sent, delivered, and seen states.
+5. Ensure read receipts and unread counts remain consistent.
+6. Fix typing indicators and their expiration.
+7. Fix scrolling, new-message indicators, and jump-to-latest behavior.
+8. Implement consistent Today and Yesterday separators.
+9. Handle network interruptions and temporary disconnections.
+10. Recover conversation state correctly after reconnection.
+11. Prevent stale WebSocket events from modifying the wrong conversation.
+12. Validate message permissions and payloads on the server.
+13. Enforce message-size limits and safe input handling.
+14. Handle simultaneous joins, leaves, and message submissions.
+15. Ensure failed requests provide useful errors and safe retry behavior.
+16. Test messaging across separate browsers, devices, and mobile layouts.
+
+# PHASE 3: FIX SESSIONS AND MATCHMAKING — P0
+
+1. Establish a consistent session lifecycle.
+2. Prevent ghost users and stale matchmaking entries.
+3. Handle browser refreshes and reconnections reliably.
+4. Prevent duplicate or conflicting matchmaking requests.
+5. Handle simultaneous matchmaking operations safely.
+6. Implement reliable queue cancellation and timeout handling.
+7. Prevent incompatible multiple-room membership.
+8. Define skip, leave, block, and rematch behavior.
+9. Prevent users from re-entering blocked interactions through trivial session changes.
+10. Implement room expiration and abandoned-session cleanup.
+11. Define reconnect grace periods and disconnected-player handling.
+12. Ensure room state cannot be accessed by unauthorized users.
+13. Handle server restarts without leaving invalid session references.
+14. Test matchmaking races, repeated requests, and simultaneous disconnects.
+
+# PHASE 4: REPAIR AND PERFECT ALL EIGHT GAMES — P0
+
+First verify which games are currently implemented and identify their actual defects.
+
+## UNO
+1. Validate legal card plays and turn progression.
+2. Verify draw behavior, penalties, and supported stacking rules.
+3. Fix final-card and winner detection.
+4. Handle disconnected players and invalid actions.
+5. Verify rematches and complete match recovery.
+
+## Tic-Tac-Toe
+1. Prevent occupied-cell moves.
+2. Enforce server-authoritative turn order.
+3. Correct win and draw detection.
+4. Synchronize both players' boards and results.
+5. Verify invitations, rematches, and reconnection.
+
+## Rock Paper Scissors
+1. Fix best-of-three round progression.
+2. Handle ties and repeated rounds.
+3. Synchronize scores and final results.
+4. Prevent duplicate submissions.
+5. Verify rematches and disconnect handling.
+
+## Connect Four
+1. Prevent interaction during the opponent's turn.
+2. Validate all moves on the server.
+3. Handle full columns and invalid moves.
+4. Correct horizontal, vertical, and diagonal win detection.
+5. Handle draws, reconnection, and rematches.
+
+## Chess
+1. Correct piece rendering and board synchronization.
+2. Implement or verify complete legal-move validation.
+3. Handle check, checkmate, and stalemate.
+4. Support castling, en passant, and promotion.
+5. Handle draws and other applicable chess rules.
+6. Prevent illegal moves and unauthorized board modifications.
+7. Test complete matches, reconnection, and rematches.
+
+## Trivia
+1. Fix question progression.
+2. Synchronize questions, answers, timers, and scores.
+3. Validate answers on the server.
+4. Handle timeouts and disconnected players.
+5. Prevent duplicate scoring.
+6. Ensure the game completes correctly when questions are exhausted.
+
+## Would You Rather
+1. Synchronize prompts and round transitions.
+2. Validate player submissions and voting.
+3. Display results consistently.
+4. Prevent duplicate or late votes.
+5. Handle disconnections and rematches.
+
+## Draw & Guess
+1. Synchronize drawing events and canvas state.
+2. Enforce drawing permissions.
+3. Synchronize guesses, rounds, timers, and scores.
+4. Prevent unauthorized drawing-event injection.
+5. Handle disconnections and round transitions.
+6. Verify complete matches and rematches.
+
+## Shared game requirements
+1. Create reusable game-room and lifecycle logic.
+2. Keep authoritative game state on the server.
+3. Validate all moves and transitions on the server.
+4. Prevent duplicate actions and stale-state updates.
+5. Support invitations, acceptance, cancellation, and rematches.
+6. Handle abandoned matches, forfeits, timeouts, and draws.
+7. Restore valid game state after reconnection.
+8. Standardize game events, error responses, and results.
+9. Add complete automated tests for every advertised game.
+10. Verify each game on desktop and mobile using separate player sessions.
+
+# PHASE 5: SECURITY AND ABUSE PREVENTION — P0
+
+1. Perform a security threat assessment of the entire application.
+2. Enforce server-side authorization for every protected operation.
+3. Secure session credentials, cookies, and token handling.
+4. Validate WebSocket origins and connection permissions.
+5. Validate all API inputs, WebSocket events, and uploaded files.
+6. Implement rate limiting for sensitive operations.
+7. Prevent spam, flooding, matchmaking abuse, and resource exhaustion.
+8. Prevent game cheating and unauthorized state changes.
+9. Harden administrator and moderator permissions.
+10. Secure reporting, blocking, bans, and moderation workflows.
+11. Protect against injection, cross-site scripting, CSRF where applicable, and unsafe redirects.
+12. Configure appropriate security headers and transport security.
+13. Keep secrets out of frontend bundles, source code, logs, and version control.
+14. Scan the repository and Git history for exposed credentials.
+15. Rotate any credentials found to have been exposed.
+16. Audit dependencies for known vulnerabilities.
+17. Secure file uploads and prevent unauthorized media access.
+18. Restrict sensitive information in application logs.
+19. Test authorization boundaries and common attack scenarios.
+20. Arrange independent security testing before broad public release.
+
+# PHASE 6: PRIVACY AND MODERATION — P0
+
+1. Document exactly what user data the application collects.
+2. Minimize the collection of personally identifying information.
+3. Define retention and deletion rules for messages, media, sessions, and logs.
+4. Preserve the intended ephemeral nature of anonymous conversations where required.
+5. Separate durable moderation records from private conversation content where possible.
+6. Provide understandable privacy information to users.
+7. Define age eligibility and appropriate safeguards.
+8. Implement accessible reporting and blocking workflows.
+9. Establish moderator permissions and administrative audit records.
+10. Restrict access to identifying information.
+11. Avoid capturing private messages in analytics or error reports.
+12. Document third-party data sharing, including AI and media providers.
+13. Implement applicable deletion and data-request procedures.
+14. Secure backups containing data that must be retained.
+15. Test privacy controls and deletion behavior.
+
+# PHASE 7: TESTING AND QUALITY GATES — P0
+
+1. Ensure clean installation and production builds succeed.
+2. Require linting and type checking to pass.
+3. Add unit tests for important business rules.
+4. Add integration tests for APIs, database operations, and WebSockets.
+5. Add end-to-end tests for matchmaking and messaging.
+6. Add end-to-end tests for every advertised game.
+7. Test reconnects, concurrent actions, and duplicate requests.
+8. Test invalid moves and unauthorized requests.
+9. Test session expiration and abandoned-room cleanup.
+10. Add accessibility and responsive-layout checks.
+11. Add dependency and secret scanning.
+12. Measure coverage of critical paths.
+13. Block releases when required checks fail.
+14. Run staging smoke tests before production releases.
+15. Maintain a regression suite for previously fixed defects.
+16. Maintain a verified feature matrix and known-defect register.
+17. Test deployment rollback and recovery procedures.
+
+# PHASE 8: BACKEND ARCHITECTURE AND PERSISTENCE — P1
+
+1. Inventory all in-memory state and its failure consequences.
+2. Classify data as ephemeral, recoverable, or durable.
+3. Evaluate Redis or an equivalent shared store for distributed sessions and matchmaking.
+4. Introduce shared room coordination before operating multiple application instances.
+5. Use a durable database for records that must survive restarts.
+6. Persist moderation actions, bans, and necessary audit events.
+7. Implement database migrations and integrity constraints where applicable.
+8. Add appropriate indexes and optimize expensive queries.
+9. Use atomic operations or transactions for concurrent state changes.
+10. Implement idempotency for retryable operations.
+11. Define expiration rules for sessions, rooms, and temporary data.
+12. Design backups and restoration procedures for durable records.
+13. Test database, cache, and application restarts.
+14. Document state recovery guarantees and known limitations.
+15. Avoid introducing microservices unless measured needs justify them.
+
+# PHASE 9: SCALABILITY AND PERFORMANCE — P1
+
+1. Define realistic targets for concurrent users, active rooms, and message throughput.
+2. Establish latency, availability, and error-rate targets.
+3. Build repeatable load tests.
+4. Measure CPU, memory, event-loop lag, bandwidth, and active connections.
+5. Measure message latency using percentiles.
+6. Test traffic spikes and reconnect storms.
+7. Test slow clients and network interruptions.
+8. Identify memory leaks and unbounded collections.
+9. Bound queues, buffers, caches, and per-session resources.
+10. Optimize bottlenecks based on profiling.
+11. Evaluate load balancing and WebSocket routing for multiple instances.
+12. Coordinate sessions, matchmaking, and rate limits across instances.
+13. Implement backpressure for slow consumers.
+14. Evaluate background workers when justified.
+15. Validate autoscaling behavior before relying on it.
+16. Publish capacity estimates only when supported by reproducible benchmark results.
+
+# PHASE 10: MEDIA, MUSIC, AND SHARED ACTIVITIES — P1
+
+1. Validate actual file types and enforce upload limits.
+2. Sanitize filenames and isolate untrusted media.
+3. Implement safe upload retries, cancellation, and cleanup.
+4. Restrict private media access.
+5. Optimize image sizes and delivery.
+6. Synchronize music play, pause, seeking, and track changes.
+7. Establish consistent playback authority.
+8. Recover shared playback after reconnection.
+9. Handle unavailable tracks and provider failures.
+10. Respect copyright, music licensing, and provider terms.
+11. Provide controls for shared playback preferences.
+12. Test media and music functionality on mobile and slow connections.
+
+# PHASE 11: AI ASSISTANT AND STUDY FEATURES — P1
+
+1. Define the assistant's supported capabilities and limitations.
+2. Separate deterministic application logic from model-generated responses.
+3. Implement reliable AI provider selection and fallback.
+4. Add timeouts, retries, rate limits, and spending limits.
+5. Handle provider outages and quota exhaustion.
+6. Provide opt-in study explanations and conversation starters.
+7. Support study summaries and quiz generation.
+8. Introduce document-based retrieval when useful.
+9. Cite source passages for document-grounded answers.
+10. Make the assistant acknowledge uncertainty.
+11. Protect against prompt injection and unauthorized tool execution.
+12. Validate tool arguments and permissions on the server.
+13. Minimize private data sent to external AI providers.
+14. Test response quality, latency, fallback behavior, and cost.
+15. Ensure the application remains usable when AI providers are unavailable.
+
+# PHASE 12: FRONTEND, UX, AND ACCESSIBILITY — P1
+
+1. Preserve CourseMates' existing visual identity.
+2. Standardize typography, spacing, colors, and reusable components.
+3. Simplify navigation and eliminate redundant controls.
+4. Optimize chat layouts for desktop, tablet, and mobile.
+5. Make the composer keyboard-safe on mobile.
+6. Improve loading, empty, offline, error, and retry states.
+7. Optimize long message lists and repeated rendering.
+8. Prevent layout shifts and unnecessary page reloads.
+9. Optimize media loading.
+10. Support keyboard navigation and visible focus.
+11. Add screen-reader labels and appropriate announcements.
+12. Improve color contrast.
+13. Respect reduced-motion preferences.
+14. Make game controls touch-friendly.
+15. Keep sound and haptic feedback configurable.
+16. Improve onboarding without unnecessary steps.
+17. Communicate anonymity and privacy expectations clearly.
+18. Ensure errors provide actionable guidance.
+19. Test responsive layouts and supported browsers.
+20. Remove distracting visual effects that reduce readability.
+
+# PHASE 13: ARCHITECTURE AND CODE QUALITY — P1
+
+1. Establish clear module boundaries for chat, matchmaking, games, media, moderation, and AI.
+2. Standardize API contracts and WebSocket event schemas.
+3. Use consistent runtime validation and error formats.
+4. Eliminate duplicated game lifecycle and authorization logic.
+5. Reduce circular dependencies.
+6. Remove dead code and unused dependencies after verification.
+7. Update dependencies through a controlled process.
+8. Apply consistent formatting and strict type checking.
+9. Document important architectural decisions.
+10. Keep frontend and backend responsibilities explicit.
+11. Evaluate Python and C++ based on measurable value rather than novelty.
+12. Document setup, debugging, configuration, and development workflows.
+
+# PHASE 14: DEPLOYMENT AND OPERATIONS — P1
+
+1. Separate development, staging, and production environments.
+2. Validate required environment variables at startup.
+3. Store production secrets securely.
+4. Implement readiness and liveness health checks.
+5. Handle graceful shutdown.
+6. Add structured logging with sensitive-data redaction.
+7. Monitor errors, latency, connections, and resource usage.
+8. Configure meaningful alerts.
+9. Document deployment, migration, and rollback procedures.
+10. Test database and cache recovery.
+11. Use reproducible builds and controlled runtime versions.
+12. Verify hosting CPU, memory, bandwidth, and connection limits.
+13. Establish an incident-response checklist.
+14. Document operational ownership and recovery responsibilities.
+
+# PHASE 15: PRODUCT DIFFERENTIATION — P2
+
+1. Improve anonymous matching using optional interests and conversation preferences.
+2. Support opt-in topic-based study rooms.
+3. Improve shared multiplayer experiences.
+4. Add private game lobbies and invitations where useful.
+5. Evaluate tournaments and leaderboards without compromising privacy.
+6. Consider optional friend or recurring-pseudonym functionality only if consistent with the product's privacy goals.
+7. Improve study assistance through approved learning materials.
+8. Evaluate multilingual interfaces.
+9. Consider optional group collaboration features.
+10. Add new games only after existing games are reliable.
+11. Validate demand with actual students before building large new modules.
+12. Keep the core product simple and avoid unnecessary feature bloat.
+
+# PHASE 16: ANALYTICS AND PRODUCT QUALITY — P2
+
+1. Measure successful matchmaking and time to match.
+2. Measure messaging failures and reconnect success.
+3. Track completed games and game-specific failures.
+4. Monitor crashes and performance regressions.
+5. Measure onboarding completion and voluntary return rates.
+6. Use privacy-conscious aggregate analytics.
+7. Exclude private messages and secrets from analytics.
+8. Establish service-level indicators and targets.
+9. Review feedback and moderation reports.
+10. Use staged rollouts and rollback when necessary.
+11. Distinguish real usage from automated traffic.
+12. Use metrics to improve user experience rather than maximize engagement at any cost.
+
+# PHASE 17: COST AND SUSTAINABILITY — P1
+
+1. Estimate hosting costs at different concurrency levels.
+2. Track AI usage and provider quotas.
+3. Budget media storage and bandwidth.
+4. Alert on unexpected costs.
+5. Define appropriate usage limits.
+6. Review third-party privacy and data-processing terms.
+7. Audit licenses for dependencies and assets.
+8. Respect music and media licensing requirements.
+9. Remove unnecessary recurring service costs.
+10. Document the trade-offs behind major infrastructure decisions.
+
+# PHASE 18: DOCUMENTATION AND RELEASE READINESS — P1
+
+1. Maintain an accurate architecture diagram.
+2. Document environment variables without exposing secrets.
+3. Write setup and deployment instructions.
+4. Document API routes and WebSocket events.
+5. Document game rules and state transitions.
+6. Document moderation, privacy, and retention policies.
+7. Maintain a changelog and versioning policy.
+8. Document known limitations.
+9. Record actual test results for completed improvements.
+10. Document backup, restore, and rollback procedures.
+11. Maintain a release checklist.
+12. Complete a security and privacy review before broad public release.
+13. Prevent release while critical defects remain unresolved.
+
+# PHASE 19: ADVANCED FUTURE CAPABILITIES — P2
+
+1. Evaluate optional push notifications.
+2. Consider private group rooms with explicit membership controls.
+3. Evaluate cross-device session continuity.
+4. Consider additional game modes and tournaments.
+5. Explore document-grounded AI study workspaces.
+6. Evaluate university learning-system integrations only with appropriate authorization.
+7. Explore multilingual study assistance.
+8. Consider advanced abuse detection with safeguards against false positives.
+9. Evaluate each new feature for maintenance cost, privacy impact, and user value.
+
+# REQUIRED EXECUTION STRATEGY
+
+## Step 1: Audit
+
+Inspect the repository and produce an evidence-based report of completed, incomplete, broken, and unnecessary items.
+
+## Step 2: Prioritize
+
+Rank verified problems by severity, user impact, security risk, dependencies, and implementation cost.
+
+## Step 3: Stabilize
+
+Fix critical messaging, session, matchmaking, game, and security defects first.
+
+## Step 4: Verify
+
+Run appropriate tests after each change. Record exact results and any remaining failures.
+
+## Step 5: Strengthen
+
+Improve architecture, persistence, recovery, deployment, and monitoring.
+
+## Step 6: Optimize
+
+Benchmark performance and fix measured bottlenecks.
+
+## Step 7: Expand
+
+Implement new capabilities only after the foundations meet their acceptance criteria.
+
+## Step 8: Final audit
+
+Produce a final report containing:
+- Completed improvements.
+- Files changed.
+- Tests executed and actual results.
+- Remaining defects and blockers.
+- Security and privacy findings.
+- Performance measurements, if obtained.
+- Deployment and migration risks.
+- Features that remain unverified.
+- Recommended next priorities.
+
+## DEFINITION OF SUCCESS
+
+CourseMates is considered substantially improved only when its advertised functionality is verified, messaging and matchmaking are dependable, all advertised games pass complete gameplay tests, security and privacy controls are effective, critical regressions are caught automatically, operational recovery is documented, and scalability claims are supported by actual measurements.
+
+**Start by auditing the current repository. Then implement the highest-priority verified improvements in small, tested stages. Do not stop at planning, and never report unverified work as completed.**
